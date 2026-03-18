@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+declare -ra bltins=(builtin cd continue declare echo exit getopts read return set shift source test trap unalias unset)
+enable >/dev/null 2>&1 "${bltins[@]}"
+unalias >/dev/null 2>&1 "${bltins[@]}"
+
+set -e
+
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_LIB=${TOWEL_LIB:-"$TOWEL_DATA/lib"}
+
+if [ ! -d "$TOWEL_LIB" ]; then
+	echo 1>&2 "Towel library not found at $TOWEL_LIB"
+	exit 1
+fi
+
+source "$TOWEL_LIB/opts"
+source "$TOWEL_LIB/help"
+source "$TOWEL_LIB/run"
+
+declare -rA cmd_handlers=([create]="towel_create" [exec]="towel_exec" [enter]="towel_enter" [export]="towel_export" [install]="towel_install" [remove]="towel_remove")
+declare -rA opt_handlers=([-h]="print_help")
+
+while [[ $# -gt 0 ]]; do
+	arg="$1"
+	shift
+	if [[ " ${!opt_handlers[*]} " == *" $arg "* ]]; then
+		handler="${opt_handlers[$arg]}"
+		"$handler" "$@"
+	elif [[ " ${!cmd_handlers[*]} " == *" $arg "* ]]; then
+		"${cmd_handlers[$arg]}" "$@"
+	else
+		[[ "$arg" == -* ]] && unknown_option "$arg"
+		unknown_command "$arg"
+		exit 1
+	fi
+	"${cmd_handlers[enter]}" "$@"
+done
