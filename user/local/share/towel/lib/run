@@ -1,0 +1,103 @@
+#!/bin/bash
+
+TOWEL_INI="/etc/distrobox/towel.ini"
+
+function inside_towel () {
+	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] > /dev/null 2>&1
+}
+
+function towel_sanity_check () {
+	if [ -n "$CONTAINER_ID" ]; then
+		builtin echo "Command shouldn't be run inside a container, rerun command on the host system." 1>&2
+		exit 1
+	fi
+}
+
+function towel_exists () {
+	podman container exists towel > /dev/null 2>&1
+}
+
+function towel_create () {
+	towel_sanity_check
+	distrobox assemble create --file "$TOWEL_INI"
+}
+
+function towel_enter () {
+	towel_sanity_check
+	if ! towel_exists; then
+		builtin echo "No such container towel"
+		while builtin read -rp "Create it now? yes|No:"; do
+			case "$REPLY" in
+				y|yes|Y|Yes|YES)
+					towel_create
+					break
+					;;
+				n|no|N|No|NO)
+					:
+					;;
+				*)
+					echo "Invalid input." 1>&2
+					;;
+			esac
+			exit 1
+		done
+	fi
+	distrobox enter towel
+}
+
+function towel_auto_export () {
+	if ! inside_towel; then
+		return
+	fi
+	local bins_regex='/usr/bin/\S+'
+	local desktops_regex='/usr/share/applications/\S+\.desktop'
+	local files
+	files=$(dnf repoquery -l "$1" 2>/dev/null | grep -oE '^('"$bins_regex"'|'"$desktops_regex"')$' 2>/dev/null | sort -u)
+	if [ -z "$files" ]; then
+		return
+	fi
+	desktop_files=$(grep -E "$desktops_regex" <<< "$files") || true
+	if [ -n "$desktop_files" ]; then
+		while IFS= read -r desktop_file; do
+			if [ -e "$desktop_file" ]; then
+				distrobox-export --app "$desktop_file"
+			fi
+		done <<< "$desktop_files"
+		return
+	fi
+	bin_files=$(grep -E "$bins_regex" <<< "$files") || true
+	if [ -n "$bin_files" ]; then
+		while IFS= read -r bin_file; do
+			if [ -e "$bin_file" ]; then
+				distrobox-export --bin "$bin_file"
+			fi
+		done <<< "$bin_files"
+	fi
+}
+
+function towel_install () {
+if [ -z "${CONTAINER_ID}" ]; then
+        exec distrobox-enter  -n towel  --  "$HOME/.local/bin/towel" install "$@"
+elif ! inside_towel ; then
+        exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" install "$@"
+fi
+	sudo dnf install "$@" || true
+	for pkg in "$@"; do
+		towel_auto_export "$pkg"
+	done
+}
+
+function towel_exec () {
+	if [ -z "${CONTAINER_ID}" ]; then
+		exec distrobox-enter  -n towel  --  "$HOME/.local/bin/towel" exec "$@"
+	elif ! inside_towel ; then
+		exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" exec "$@"
+	else
+		exec "$@"
+	fi
+}
+
+function towel_remove () {
+	towel_sanity_check
+	distrobox assemble rm --file "$TOWEL_INI"
+}

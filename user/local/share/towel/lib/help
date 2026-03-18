@@ -1,8 +1,9 @@
 #!/bin/bash
 
 function print_help () {
-	echo 1>&2\
+	echo 1>&2 \
 "A towel is just about the most massively useful thing an interstellar hitchhiker can carry.
+
 Usage:
   towel [options] [command]
   'enter' is default if no command is given
@@ -15,14 +16,17 @@ Available Commands:
 
 Options:
   -h       Print this help text"
+	exit 0
 }
 
 function unknown_command () {
 	echo 1>&2 "Unknown command \`towel $1'"
 	echo 1>&2 "Try \`towel -h'"
+	exit 1
 }
 
 function unknown_option () {
 	echo 1>&2 "Unknown option \`towel $1'"
 	echo 1>&2 "Try \`towel -h'"
+	exit 1
 }

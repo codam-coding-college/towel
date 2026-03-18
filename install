@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+bltins=(builtin cd continue declare echo exit getopts read return set source test trap unalias unset)
+enable "${bltins[@]}" > /dev/null 2>&1
+unalias "${bltins[@]}" > /dev/null 2>&1
+
+{ # Makes sure the entire script is downloaded before execution.
+set -e
+
+declare -A color=([reset]="\033[0m" [black]="\033[30m" [red]="\033[31m" [green]="\033[32m" [yellow]="\033[33m" [blue]="\033[34m" [purple]="\033[35m" [cyan]="\033[36m" [white]="\033[37m")
+
+function cleanup () {
+	echo -e 1>&2 ${color[reset]}${color[red]}"Installation failed. Cleaning up..."${color[reset]}
+	/usr/bin/rm -rf "$TOWEL_DATA"
+	/usr/bin/rm -rf "$TOWEL_BIN"
+}
+
+function fatal () {
+	echo -ne ${color[reset]}
+	echo "$@" 1>&2
+	echo -ne ${color[reset]}
+	exit 1
+}
+
+function _manual_dir_check () {
+	local dir
+	dir="$(/usr/bin/dirname "$0")"
+	if [ -d "$dir" ] && [ -d "$dir/user" ] && [ -d "$dir/system" ]; then
+		echo "$dir"
+	else
+		fatal "Cannot find necessary directories. Please ensure you are running the installer from the correct location or install realpath/readlink."
+	fi
+}
+
+test -n "$HOME" || fatal "HOME environment variable is not set. Cannot proceed with installation."
+
+USER_CONFIG="$HOME/.config"
+TOWEL_DATA="$HOME/.local/share/towel"
+TOWEL_BIN="$HOME/.local/bin/towel"
+
+trap cleanup EXIT
+
+### START INSTALLATION
+if [ -x /usr/bin/realpath ]; then
+	cd "$(/usr/bin/dirname "$(/usr/bin/readpath -e "$0")")"
+elif [ -x /usr/bin/readlink ]; then
+	cd "$(/usr/bin/dirname "$(/usr/bin/readlink -e "$0")")"
+else
+	cd "$(_manual_dir_check)"
+fi
+
+echo -e "${color[cyan]}Installing Towel...${color[reset]}"
+echo Copying files to "$TOWEL_DATA" and creating symlink at "$TOWEL_BIN"
+/usr/bin/mkdir -p "$TOWEL_DATA"
+/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
+
+/usr/bin/cp -rt "$TOWEL_DATA" user/local/share/towel/*
+/usr/bin/cp -rt "$USER_CONFIG" user/config/containers
+/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
+
+echo -e "${color[green]}Files copied successfully.${color[reset]}"
+echo -e "${color[cyan]}Ensuring $HOME/.local/bin is in PATH...${color[reset]}"
+
+case $SHELL in
+	*bash) rc="$HOME/.bashrc";;
+	*zsh) rc="$HOME/.zshrc";;
+	*) rc="";;
+esac
+
+if [ -n "$rc" ]; then
+	if ! [[ "$PATH" =~ (^|:)"$HOME/.local/bin"(:|$) ]]; then
+		# shellcheck disable=SC2016
+		echo 'export PATH="$HOME/.local/bin:${PATH:+:$PATH}"' >> "$rc"
+		echo -e "${color[green]}Added \$HOME/.local/bin to PATH in $rc${color[reset]}"
+	fi
+else
+	echo -e "${color[red]}Warning: Could not detect shell. Please ensure that $HOME/.local/bin is in your PATH.${color[reset]}"
+fi
+
+echo -e "${color[green]}Installation complete! Restart your shell to start using towel.${color[reset]}"
+trap - EXIT
+### END INSTALLATION
+}
