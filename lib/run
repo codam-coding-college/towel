@@ -1,0 +1,40 @@
+#!/bin/bash
+
+TOWEL_INI="/etc/distrobox/distrobox.ini"
+function towel_create () {
+	distrobox assemble create --file "$TOWEL_INI" towel
+}
+
+function towel_enter () {
+	if ! towel_exists; then
+		builtin echo "No such container towel"
+		while builtin read -r; do
+			case "$REPLY" in
+				y|yes|Y|Yes|YES)
+					towel_create
+					break
+					;;
+				n|no|N|No|NO)
+					:
+					;;
+				*)
+					echo "Invalid input." 1>&2
+					;;
+			esac
+			exit 1
+		done
+	fi
+	distrobox enter towel
+}
+
+function towel_install () {
+	return $?
+}
+
+function towel_remove () {
+	distrobox assemble rm --file "$TOWEL_INI" towel
+}
+
+function towel_exists () {
+	podman container stats towel > /dev/null 2>&1
+}

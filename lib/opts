@@ -1,0 +1,16 @@
+#!/bin/bash
+
+function towel_opts () {
+	while builtin getopts 'h' arg; do
+		case $arg in
+			h)
+				print_help
+				exit 0
+				;;
+			*)
+				unknown_option
+				exit 1
+				;;
+		esac
+	done
+}
