@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_LIB=${TOWEL_LIB:-"$TOWEL_DATA/lib"}
+
+builtin source "$TOWEL_LIB"/opts
+builtin source "$TOWEL_LIB"/help
+builtin source "$TOWEL_LIB"/run
+
+towel_opts "$@"
+shift "$((OPTIND - 1))"
+
+case "$1" in
+	create)
+		builtin shift
+		towel_create "$@"
+		;;
+	enter)
+		builtin shift
+		towel_enter "$@"
+		;;
+	remove)
+		builtin shift
+		towel_remove "$@"
+		;;
+	*)
+		unknown_command "$1"
+		builtin exit 1
+esac
