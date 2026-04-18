@@ -11,8 +11,12 @@ Usage:
 Available Commands:
   create   Create towel container
   enter    Enter towel container
-  install  Install package inside the towel container
+  export   Export installed package apps/binaries to host wrappers
+  install  Install package inside the towel container (prompts for host export)
   remove   Remove towel container, cannot be undone
+
+Install Options:
+  -y, --yes  Assume yes to export prompt during install
 
 Options:
   -h       Print this help text"

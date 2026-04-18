@@ -11,8 +11,12 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 
 	function cleanup() {
 		echo -e "${color[reset]}${color[red]}Installation failed. Cleaning up...${color[reset]}" 1>&2
-		/usr/bin/rm -rf "$TOWEL_DATA"
-		/usr/bin/rm -rf "$TOWEL_BIN"
+		if [ "$created_towel_data" = "true" ] && [ -n "$TOWEL_DATA" ] && [ "$TOWEL_DATA" = "$HOME/.local/share/towel" ]; then
+			/usr/bin/rm -rf "$TOWEL_DATA"
+		fi
+		if [ "$created_towel_bin" = "true" ] && [ -n "$TOWEL_BIN" ] && [ "$TOWEL_BIN" = "$HOME/.local/bin/towel" ]; then
+			/usr/bin/rm -rf "$TOWEL_BIN"
+		fi
 	}
 
 	function fatal() {
@@ -26,6 +30,8 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	USER_CONFIG="$HOME/.config"
 	TOWEL_DATA="$HOME/.local/share/towel"
 	TOWEL_BIN="$HOME/.local/bin/towel"
+	created_towel_data="false"
+	created_towel_bin="false"
 
 	trap cleanup EXIT
 
@@ -34,11 +40,17 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 
 	echo -e "${color[cyan]}Installing Towel...${color[reset]}"
 	echo "Copying files to $TOWEL_DATA and creating symlink at $TOWEL_BIN"
+	if [ ! -d "$TOWEL_DATA" ]; then
+		created_towel_data="true"
+	fi
 	/usr/bin/mkdir -p "$TOWEL_DATA"
 	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
 
 	/usr/bin/cp -rt "$TOWEL_DATA" user/local/share/towel/*
 	/usr/bin/cp -rt "$USER_CONFIG" user/config/containers
+	if [ ! -e "$TOWEL_BIN" ] && [ ! -L "$TOWEL_BIN" ]; then
+		created_towel_bin="true"
+	fi
 	/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
 
 	echo -e "${color[green]}Files copied successfully.${color[reset]}"
@@ -51,9 +63,38 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	esac
 
 	if [ -n "$rc" ]; then
-		if ! [[ "$PATH" =~ (^|:)"$HOME/.local/bin"(:|$) ]]; then
-			# shellcheck disable=SC2016 # Justification: Variables should evaluate at shell startup, not during install.
-			echo 'export PATH="$HOME/.local/bin:${PATH:+:$PATH}"' >>"$rc"
+		# shellcheck disable=SC2016 # Justification: Match/write a literal rc line; expansion should happen at shell startup.
+		path_export_line='export PATH="$HOME/.local/bin:${PATH:+:$PATH}"'
+		# shellcheck disable=SC2016 # Justification: Pattern intentionally matches literal shell syntax in rc files.
+		path_token_regex='(^|[^[:alnum:]_])((\$HOME|~)/\.local/bin)([^[:alnum:]_]|$)'
+		if /usr/bin/grep -Fqx "$path_export_line" "$rc" 2>/dev/null; then
+			:
+		elif /usr/bin/grep -Eq "$path_token_regex" "$rc" 2>/dev/null; then
+			echo -e "${color[green]}Detected an existing \$HOME/.local/bin PATH entry in $rc. Skipping.${color[reset]}"
+		elif [[ "$PATH" =~ (^|:)"$HOME/.local/bin"(:|$) ]]; then
+			echo -e "${color[yellow]}$HOME/.local/bin is already in current PATH, but no clear entry was found in $rc.${color[reset]}"
+			if [ -t 0 ]; then
+				while builtin read -rp "Append PATH export to $rc anyway? [y/N] "; do
+					case "$REPLY" in
+					y | yes | Y | Yes | YES)
+						echo "$path_export_line" >>"$rc"
+						echo -e "${color[green]}Added \$HOME/.local/bin to PATH in $rc${color[reset]}"
+						break
+						;;
+					n | no | N | No | NO | "")
+						echo -e "${color[cyan]}Skipped PATH update in $rc.${color[reset]}"
+						break
+						;;
+					*)
+						echo "Invalid input." 1>&2
+						;;
+					esac
+				done
+			else
+				echo -e "${color[yellow]}Non-interactive shell: skipping PATH update to avoid duplicate entries.${color[reset]}"
+			fi
+		else
+			echo "$path_export_line" >>"$rc"
 			echo -e "${color[green]}Added \$HOME/.local/bin to PATH in $rc${color[reset]}"
 		fi
 	else

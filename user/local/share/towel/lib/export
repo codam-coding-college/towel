@@ -1,0 +1,136 @@
+#!/bin/bash
+
+function towel_export_bin_wrapper() {
+	local cmd_name="$1"
+	local wrapper_dir="${HOME}/.local/bin"
+	local wrapper_path="${wrapper_dir}/${cmd_name}"
+
+	mkdir -p "$wrapper_dir"
+	cat >"$wrapper_path" <<EOF
+#!/usr/bin/env bash
+# name: towel
+# command: ${cmd_name}
+
+"\${HOME}/.local/bin/towel" exec "${cmd_name}" "\$@"
+ret=\$?
+if [ \$ret -ne 0 ]; then
+	read -p "Execution failed. Remove exported app? [y/N] " ans < /dev/tty 2>/dev/null || true
+	case "\$ans" in
+		[Yy]*)
+			rm -f "\$0"
+			;;
+	esac
+fi
+exit \$ret
+EOF
+	chmod +x "$wrapper_path"
+}
+
+function towel_export_desktop_wrapper() {
+	local desktop_file="$1"
+	local desktop_name
+	desktop_name="$(basename "$desktop_file")"
+	local target_dir="${HOME}/.local/share/applications"
+	local target_file="${target_dir}/towel-${desktop_name}"
+
+	if [ ! -f "$desktop_file" ]; then
+		return
+	fi
+
+	mkdir -p "$target_dir"
+	cp -f "$desktop_file" "$target_file"
+
+	local exec_line
+	exec_line=$(grep "^Exec=" "$desktop_file" | head -n 1 | sed 's/^Exec=//')
+	if [ -n "$exec_line" ]; then
+		sed -i "s|^Exec=.*|Exec=${HOME}/.local/bin/towel exec ${exec_line}|g" "$target_file"
+	fi
+
+	if grep -q "^TryExec=" "$target_file"; then
+		sed -i "s|^TryExec=.*|TryExec=${HOME}/.local/bin/towel|g" "$target_file"
+	fi
+
+	if ! grep -q "^X-Towel-Exported=" "$target_file"; then
+		echo "X-Towel-Exported=true" >>"$target_file"
+	fi
+
+	update-desktop-database "$target_dir" >/dev/null 2>&1 || true
+}
+
+function towel_repoquery_exportables() {
+	local pkg="$1"
+	local bins_regex='/usr/bin/\S+'
+	local desktops_regex='/usr/share/applications/\S+\.desktop'
+
+	dnf repoquery -l "$pkg" 2>/dev/null | grep -oE '^('"$bins_regex"'|'"$desktops_regex"')$' 2>/dev/null | sort -u
+}
+
+function towel_auto_export() {
+	if ! inside_towel; then
+		return
+	fi
+
+	local files
+	files=$(towel_repoquery_exportables "$1")
+	if [ -z "$files" ]; then
+		return
+	fi
+
+	local desktop_files
+	desktop_files=$(grep -E '^/usr/share/applications/\S+\.desktop$' <<<"$files") || true
+	if [ -n "$desktop_files" ]; then
+		while IFS= read -r desktop_file; do
+			if [ -e "$desktop_file" ]; then
+				towel_export_desktop_wrapper "$desktop_file"
+			fi
+		done <<<"$desktop_files"
+	fi
+
+	local bin_files
+	bin_files=$(grep -E '^/usr/bin/\S+$' <<<"$files") || true
+	if [ -n "$bin_files" ]; then
+		while IFS= read -r bin_file; do
+			if [ -e "$bin_file" ]; then
+				towel_export_bin_wrapper "$(basename "$bin_file")"
+			fi
+		done <<<"$bin_files"
+	fi
+}
+
+function towel_export() {
+	if [ $# -eq 0 ]; then
+		builtin echo "No package specified." 1>&2
+		exit 1
+	fi
+
+	if [ -z "${CONTAINER_ID}" ]; then
+		exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" export "$@"
+	elif ! inside_towel; then
+		exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" export "$@"
+	fi
+
+	for pkg in "$@"; do
+		towel_auto_export "$pkg"
+	done
+}
+
+function towel_remove_exported_apps() {
+	local target_app="${1:-}"
+
+	if [ -d "${HOME}/.local/bin" ]; then
+		if [ -n "$target_app" ]; then
+			find "${HOME}/.local/bin" -maxdepth 1 -type f -exec grep -q "^# name: towel$" {} \; -exec grep -q "$target_app" {} \; -delete
+		else
+			find "${HOME}/.local/bin" -maxdepth 1 -type f -exec grep -q "^# name: towel$" {} \; -delete
+		fi
+	fi
+
+	if [ -d "${HOME}/.local/share/applications" ]; then
+		if [ -n "$target_app" ]; then
+			find "${HOME}/.local/share/applications" -maxdepth 1 -name "towel-*.desktop" -type f -exec grep -q "Exec=.*$target_app" {} \; -delete
+		else
+			find "${HOME}/.local/share/applications" -maxdepth 1 -name "towel-*.desktop" -type f -delete
+		fi
+		update-desktop-database "${HOME}/.local/share/applications" >/dev/null 2>&1 || true
+	fi
+}

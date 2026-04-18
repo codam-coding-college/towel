@@ -16,6 +16,8 @@ fi
 
 source "$TOWEL_LIB/opts"
 source "$TOWEL_LIB/help"
+source "$TOWEL_LIB/export"
+source "$TOWEL_LIB/install"
 source "$TOWEL_LIB/run"
 
 declare -rA cmd_handlers=([create]="towel_create" [exec]="towel_exec" [enter]="towel_enter" [export]="towel_export" [install]="towel_install" [remove]="towel_remove")
