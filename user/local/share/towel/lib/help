@@ -11,7 +11,7 @@ Usage:
 Available Commands:
   create   Create towel container
   enter    Enter towel container
-  export   Export installed package apps/binaries to host wrappers
+  export   Export installed package apps/binaries to host-managed wrappers
   install  Install package inside the towel container (prompts for host export)
   remove   Remove towel container, cannot be undone
 
