@@ -1,4 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+TOWEL_INI="/etc/distrobox/distrobox.ini"
+
+function inside_towel() {
+	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] >/dev/null 2>&1
+}
+
+function towel_sanity_check() {
+	if [ -n "$CONTAINER_ID" ]; then
+		builtin echo "Command shouldn't be run inside a container, rerun command on the host system." 1>&2
+		exit 1
+	fi
+}
+
+function towel_exists() {
+	podman container exists towel >/dev/null 2>&1
+}
 
 function towel_exports_root() {
 	echo "${TOWEL_DATA:-${HOME}/.local/share/towel}/exports"
@@ -148,23 +165,6 @@ function towel_auto_export() {
 			fi
 		done <<<"$bin_files"
 	fi
-}
-
-function towel_export() {
-	if [ $# -eq 0 ]; then
-		builtin echo "No package specified." 1>&2
-		exit 1
-	fi
-
-	if [ -z "${CONTAINER_ID}" ]; then
-		exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" export "$@"
-	elif ! inside_towel; then
-		exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" export "$@"
-	fi
-
-	for pkg in "$@"; do
-		towel_auto_export "$pkg"
-	done
 }
 
 function towel_remove_exported_apps() {

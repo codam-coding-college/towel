@@ -7,34 +7,47 @@ unalias >/dev/null 2>&1 "${bltins[@]}"
 set -e
 
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
-TOWEL_LIB=${TOWEL_LIB:-"$TOWEL_DATA/lib"}
+TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 
-if [ ! -d "$TOWEL_LIB" ]; then
-	echo 1>&2 "Towel library not found at $TOWEL_LIB"
+if [ ! -d "$TOWEL_BIN_DIR" ]; then
+	echo 1>&2 "Towel commands not found at $TOWEL_BIN_DIR"
 	exit 1
 fi
 
-source "$TOWEL_LIB/opts"
-source "$TOWEL_LIB/help"
-source "$TOWEL_LIB/export"
-source "$TOWEL_LIB/install"
-source "$TOWEL_LIB/run"
+function print_help() {
+	"$TOWEL_BIN_DIR/towel-help"
+}
 
-declare -rA cmd_handlers=([create]="towel_create" [exec]="towel_exec" [enter]="towel_enter" [export]="towel_export" [install]="towel_install" [remove]="towel_remove")
-declare -rA opt_handlers=([-h]="print_help")
+function unknown_command() {
+	echo 1>&2 "Unknown command \`towel $1'"
+	echo 1>&2 "Try \`towel -h'"
+	exit 1
+}
 
-while [[ $# -gt 0 ]]; do
-	arg="$1"
-	shift
-	if [[ " ${!opt_handlers[*]} " == *" $arg "* ]]; then
-		handler="${opt_handlers[$arg]}"
-		"$handler" "$@"
-	elif [[ " ${!cmd_handlers[*]} " == *" $arg "* ]]; then
-		"${cmd_handlers[$arg]}" "$@"
-	else
-		[[ "$arg" == -* ]] && unknown_option "$arg"
-		unknown_command "$arg"
-		exit 1
-	fi
-	"${cmd_handlers[enter]}" "$@"
-done
+function unknown_option() {
+	echo 1>&2 "Unknown option \`towel $1'"
+	echo 1>&2 "Try \`towel -h'"
+	exit 1
+}
+
+if [ $# -eq 0 ]; then
+	exec "$TOWEL_BIN_DIR/towel-enter"
+fi
+
+cmd="$1"
+shift
+case "$cmd" in
+-h | --help)
+	print_help
+	;;
+create | exec | enter | export | install | remove)
+	"$TOWEL_BIN_DIR/towel-$cmd" "$@"
+	"$TOWEL_BIN_DIR/towel-enter" "$@"
+	;;
+-*)
+	unknown_option "$cmd"
+	;;
+*)
+	unknown_command "$cmd"
+	;;
+esac

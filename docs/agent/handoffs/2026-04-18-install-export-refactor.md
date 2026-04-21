@@ -1,16 +1,17 @@
 ---
-status: active
+status: superseded
 context_priority: high
 component: runtime/export
 created_at: 2026-04-18
 updated_at: 2026-04-18
-superseded_by: none
+superseded_by: docs/agent/handoffs/2026-04-18-command-executables-refactor.md
 resolved_by: none
 ---
 
 # Handoff: Install/Export Refactor and Native Wrappers
 
 ## Task Summary
+- Superseded rationale: command architecture moved from `lib/*` sourcing to standalone `bin/towel-*` executables.
 - Split monolithic runtime logic into focused modules: container runtime, install flow, export flow.
 - Changed install UX to explicit host export confirmation with `-y|--yes` override.
 - Replaced `distrobox-export` wrapper-patching with towel-owned wrapper generation.
