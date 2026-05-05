@@ -46,8 +46,8 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	/usr/bin/mkdir -p "$TOWEL_DATA"
 	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
 
-	/usr/bin/cp -rt "$TOWEL_DATA" user/local/share/towel/*
-	/usr/bin/cp -rt "$USER_CONFIG" user/config/containers
+	/usr/bin/cp -rft "$TOWEL_DATA/.." user/local/share/towel
+	/usr/bin/cp -rft "$USER_CONFIG" user/config/containers user/config/distrobox
 	if [ ! -e "$TOWEL_BIN" ] && [ ! -L "$TOWEL_BIN" ]; then
 		created_towel_bin="true"
 	fi

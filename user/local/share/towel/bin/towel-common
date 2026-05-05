@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-TOWEL_INI="/etc/distrobox/distrobox.ini"
+TOWEL_INI="$HOME/.config/distrobox/towel.ini"
 
 function inside_towel() {
 	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] >/dev/null 2>&1
