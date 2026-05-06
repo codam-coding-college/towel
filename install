@@ -64,7 +64,7 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 
 	if [ -n "$rc" ]; then
 		# shellcheck disable=SC2016 # Justification: Match/write a literal rc line; expansion should happen at shell startup.
-		path_export_line='export PATH="$HOME/.local/bin:${PATH:+:$PATH}"'
+		path_export_line='export PATH="$HOME/.local/bin${PATH:+:$PATH}"'
 		# shellcheck disable=SC2016 # Justification: Pattern intentionally matches literal shell syntax in rc files.
 		path_token_regex='(^|[^[:alnum:]_])((\$HOME|~)/\.local/bin)([^[:alnum:]_]|$)'
 		if /usr/bin/grep -Fqx "$path_export_line" "$rc" 2>/dev/null; then
