@@ -7,7 +7,7 @@ source "$TOWEL_BIN_DIR/towel-common"
 
 ret=0
 if [ -z "${CONTAINER_ID}" ]; then
-	distrobox-enter -n towel -- "$HOME/.local/bin/towel" exec "$@"
+	distrobox-enter -n towel -- bash -c "exec $*"
 	ret=$?
 	if [ $ret -ne 0 ]; then
 		should_prompt=false
@@ -19,13 +19,14 @@ if [ -z "${CONTAINER_ID}" ]; then
 			msg="Command '$1' not found in towel."
 		fi
 
+		msg="${msg:-"Command failed."}"
 		if [[ "$should_prompt" == true ]]; then
 			ans="n"
 			if [ -t 0 ]; then
 				read -rp "towel: $msg Remove exported app? [y/N] " ans </dev/tty || true
 			else
 				if command -v zenity >/dev/null 2>&1; then
-					zenity --question --title="$1 on towel" --text="${msg:-"Command failed."} Remove exported app?" 2>/dev/null && ans="y" || ans="n"
+					zenity --question --icon="error" --title="$1 on towel" --text="$msg Remove exported app?" 2>/dev/null && ans="y" || ans="n"
 				fi
 			fi
 			case "$ans" in
@@ -35,11 +36,9 @@ if [ -z "${CONTAINER_ID}" ]; then
 			esac
 		fi
 	fi
+	exit $ret
 elif ! inside_towel; then
-	/usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" exec "$@"
-	ret=$?
+	exec distrobox-host-exec "$HOME/.local/bin/towel" exec "$@"
 else
-	"$@"
-	ret=$?
+	exec "$@"
 fi
-exit $ret

@@ -6,16 +6,18 @@ TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 source "$TOWEL_BIN_DIR/towel-common"
 
 towel_sanity_check
-if ! towel_exists; then
+if [ -n "$CONTAINER_ID" ]; then
+	exec distrobox-host-exec "$HOME/.local/bin/towel" enter
+elif ! towel_exists; then
 	builtin echo "No such container towel"
 	while builtin read -rp "Create it now? yes|No:"; do
 		case "$REPLY" in
 		y | yes | Y | Yes | YES)
-			distrobox assemble create --file "$TOWEL_INI"
+			towel create
 			break
 			;;
 		n | no | N | No | NO)
-			:
+			exit
 			;;
 		*)
 			echo "Invalid input." 1>&2

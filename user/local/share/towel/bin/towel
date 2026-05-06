@@ -42,7 +42,6 @@ case "$cmd" in
 	;;
 create | exec | enter | export | install | remove)
 	"$TOWEL_BIN_DIR/towel-$cmd" "$@"
-	"$TOWEL_BIN_DIR/towel-enter" "$@"
 	;;
 -*)
 	unknown_option "$cmd"

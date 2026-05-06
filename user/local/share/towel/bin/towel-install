@@ -5,26 +5,25 @@ TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 
 source "$TOWEL_BIN_DIR/towel-common"
 
-assume_yes=false
+assume_yes=""
 install_args=()
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-y | --yes)
-		assume_yes=true
+		assume_yes="--yes"
+		shift
 		;;
 	--)
 		shift
+		;;&
+	*)
 		while [[ $# -gt 0 ]]; do
 			install_args+=("$1")
 			shift
 		done
 		break
 		;;
-	*)
-		install_args+=("$1")
-		;;
 	esac
-	shift
 done
 
 if [ ${#install_args[@]} -eq 0 ]; then
@@ -33,21 +32,15 @@ if [ ${#install_args[@]} -eq 0 ]; then
 fi
 
 if [ -z "${CONTAINER_ID}" ]; then
-	if [[ "$assume_yes" == true ]]; then
-		exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" install --yes "${install_args[@]}"
-	fi
-	exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" install "${install_args[@]}"
+	exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" install $assume_yes "${install_args[@]}"
 elif ! inside_towel; then
-	if [[ "$assume_yes" == true ]]; then
-		exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" install --yes "${install_args[@]}"
-	fi
-	exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" install "${install_args[@]}"
+	exec distrobox-host-exec "$HOME/.local/bin/towel" install $assume_yes "${install_args[@]}"
 fi
 
-should_export=false
-if [[ "$assume_yes" == true ]]; then
-	should_export=true
-elif [ -t 0 ]; then
+sudo dnf install "${install_args[@]}"
+
+should_export=${should_export:-false}
+if [[ "$should_export" == false ]] && [ -t 0 ]; then
 	while builtin read -rp "Export installed apps/binaries to host now? [y/N] " answer; do
 		case "$answer" in
 		y | yes | Y | Yes | YES)
@@ -67,7 +60,6 @@ else
 	exit 1
 fi
 
-sudo dnf install "${install_args[@]}" || true
 if [[ "$should_export" == true ]]; then
 	for pkg in "${install_args[@]}"; do
 		towel_auto_export "$pkg"

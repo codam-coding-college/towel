@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 TOWEL_INI="$HOME/.config/distrobox/towel.ini"
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR="${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}"
+TOWEL_EXPORTS="${TOWEL_DATA:-${HOME}/.local/share/towel}/exports"
 
 function inside_towel() {
 	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] >/dev/null 2>&1
@@ -17,16 +20,12 @@ function towel_exists() {
 	podman container exists towel >/dev/null 2>&1
 }
 
-function towel_exports_root() {
-	echo "${TOWEL_DATA:-${HOME}/.local/share/towel}/exports"
-}
-
 function towel_exports_bin_dir() {
-	echo "$(towel_exports_root)/bin"
+	echo "$TOWEL_EXPORTS/bin"
 }
 
 function towel_exports_apps_dir() {
-	echo "$(towel_exports_root)/applications"
+	echo "$TOWEL_EXPORTS/applications"
 }
 
 function towel_host_bin_dir() {
@@ -56,7 +55,10 @@ function towel_remove_managed_symlink() {
 }
 
 function towel_export_bin_wrapper() {
-	local cmd_name="$1"
+	local bin_path="$1"
+	cmd_name="$(basename "$1")"
+	local cmd_name
+	cmd_name="$(basename "$1")"
 	local export_dir
 	export_dir="$(towel_exports_bin_dir)"
 	local wrapper_path="${export_dir}/${cmd_name}"
@@ -69,6 +71,10 @@ function towel_export_bin_wrapper() {
 #!/usr/bin/env bash
 # name: towel
 # command: ${cmd_name}
+
+if [ -n "\$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ]; then
+	exec $bin_path "\$@"
+fi
 
 "\${HOME}/.local/bin/towel" exec "${cmd_name}" "\$@"
 ret=\$?
@@ -161,7 +167,7 @@ function towel_auto_export() {
 	if [ -n "$bin_files" ]; then
 		while IFS= read -r bin_file; do
 			if [ -e "$bin_file" ]; then
-				towel_export_bin_wrapper "$(basename "$bin_file")"
+				towel_export_bin_wrapper "$bin_file"
 			fi
 		done <<<"$bin_files"
 	fi

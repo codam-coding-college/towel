@@ -13,7 +13,7 @@ fi
 if [ -z "${CONTAINER_ID}" ]; then
 	exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" export "$@"
 elif ! inside_towel; then
-	exec /usr/bin/distrobox-host-exec "$HOME/.local/bin/towel" export "$@"
+	exec distrobox-host-exec "$HOME/.local/bin/towel" export "$@"
 fi
 
 for pkg in "$@"; do
