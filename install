@@ -32,6 +32,12 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	TOWEL_BIN="$HOME/.local/bin/towel"
 	created_towel_data="false"
 	created_towel_bin="false"
+	
+	distrobox_url="https://raw.githubusercontent.com/89luca89/distrobox/refs/tags/1.8.2.5/install"
+	if ! command -v distrobox >/dev/null 2>&1; then
+		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox...${color[reset]}"
+		curl -s "$distrobox_url" | sh -s -- --prefix="$HOME/.local" || fatal "Failed to install distrobox. Please install it manually and re-run this installer."
+	fi
 
 	trap cleanup EXIT
 
