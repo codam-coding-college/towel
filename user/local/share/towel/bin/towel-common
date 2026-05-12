@@ -72,7 +72,7 @@ function towel_export_bin_wrapper() {
 # name: towel
 # command: ${cmd_name}
 
-if [ -n "\$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ]; then
+if [ -n "\$CONTAINER_ID" ] && [ "\$CONTAINER_ID" = "towel" ]; then
 	exec $bin_path "\$@"
 fi
 
