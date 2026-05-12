@@ -15,7 +15,7 @@ if [ -z "${CONTAINER_ID}" ]; then
 		if ! towel_exists; then
 			should_prompt=true
 			msg="Container 'towel' does not exist."
-		elif ! distrobox-enter -n towel -- command -v "$1" >/dev/null 2>&1; then
+		elif [ "$ret" -eq 127 ] || ! distrobox-enter -n towel -- command -v "$1" >/dev/null 2>&1; then
 			should_prompt=true
 			msg="Command '$1' not found in towel."
 		fi
@@ -27,7 +27,7 @@ if [ -z "${CONTAINER_ID}" ]; then
 				read -rp "towel: $msg Remove exported app? [y/N] " ans </dev/tty || true
 			else
 				if command -v zenity >/dev/null 2>&1; then
-					zenity --question --icon="error" --title="$1 on towel" --text="$msg Remove exported app?" 2>/dev/null && ans="y" || ans="n"
+					zenity --question --icon-name="warning" --title="$1 on towel" --text="$msg Remove exported app?" && ans="y" || ans="n"
 				fi
 			fi
 			case "$ans" in
