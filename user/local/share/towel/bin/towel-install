@@ -39,8 +39,10 @@ fi
 
 sudo dnf install "${install_args[@]}"
 
-should_export=${assume_yes:-false}
-if [[ "$should_export" == false ]] && [ -t 0 ]; then
+if [[ -n "$assume_yes" ]]; then
+	should_export=true
+elif [ -t 0 ]; then
+	should_export=false
 	while builtin read -rp "Export installed apps/binaries to host now? [y/N] " answer; do
 		case "$answer" in
 		y | yes | Y | Yes | YES)
@@ -56,8 +58,7 @@ if [[ "$should_export" == false ]] && [ -t 0 ]; then
 		esac
 	done
 else
-	builtin echo "Non-interactive install requires --yes to confirm exporting apps to host." 1>&2
-	exit 1
+	should_export=false
 fi
 
 if [[ "$should_export" == true ]]; then
