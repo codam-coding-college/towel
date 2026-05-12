@@ -5,7 +5,41 @@ TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 
 source "$TOWEL_BIN_DIR/towel-common"
 
+assume_yes=false
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-y | --yes)
+		assume_yes=true
+		shift
+		;;
+	-h | --help)
+		builtin echo "Usage: towel remove [-y|--yes]"
+		builtin echo "Removes the towel container. Exported apps are unexported first."
+		exit 0
+		;;
+	*)
+		builtin echo "Unknown argument: $1" 1>&2
+		exit 1
+		;;
+	esac
+done
+
 towel_sanity_check
+
+if ! $assume_yes; then
+	if [ ! -t 0 ]; then
+		builtin echo "towel remove is destructive; refusing without --yes in non-interactive mode." 1>&2
+		exit 1
+	fi
+	builtin read -rp "Remove the towel container and all exported apps? This cannot be undone. [y/N] " answer
+	case "$answer" in
+	y | Y | yes | Yes | YES) ;;
+	*)
+		builtin echo "Aborted."
+		exit 0
+		;;
+	esac
+fi
 
 towel_remove_exported_apps
 
