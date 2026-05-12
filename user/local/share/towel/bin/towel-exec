@@ -7,7 +7,7 @@ source "$TOWEL_BIN_DIR/towel-common"
 
 ret=0
 if [ -z "${CONTAINER_ID}" ]; then
-	distrobox-enter -n towel -- bash -c "exec $*"
+	distrobox-enter -n towel -- "$@"
 	ret=$?
 	if [ $ret -ne 0 ]; then
 		should_prompt=false
