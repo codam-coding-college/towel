@@ -17,6 +17,14 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 		if [ "$created_towel_bin" = "true" ] && [ -n "$TOWEL_BIN" ] && [ "$TOWEL_BIN" = "$HOME/.local/bin/towel" ]; then
 			/usr/bin/rm -rf "$TOWEL_BIN"
 		fi
+		if [ -n "$backup_suffix" ] && [ ${#backed_up[@]} -gt 0 ]; then
+			echo -e "${color[yellow]}Restoring config backups...${color[reset]}" 1>&2
+			for dest_file in "${backed_up[@]}"; do
+				if [ -e "${dest_file}${backup_suffix}" ]; then
+					/usr/bin/mv -f "${dest_file}${backup_suffix}" "$dest_file"
+				fi
+			done
+		fi
 	}
 
 	function fatal() {
@@ -32,6 +40,8 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	TOWEL_BIN="$HOME/.local/bin/towel"
 	created_towel_data="false"
 	created_towel_bin="false"
+	backup_suffix=""
+	backed_up=()
 	
 	distrobox_url="https://raw.githubusercontent.com/89luca89/distrobox/refs/tags/1.8.2.5/install"
 	if ! command -v distrobox >/dev/null 2>&1; then
@@ -53,6 +63,25 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
 
 	/usr/bin/cp -rft "$TOWEL_DATA/.." user/local/share/towel
+
+	backup_suffix=".bak.$(/usr/bin/date +%Y%m%d%H%M%S)"
+	backed_up=()
+	while IFS= read -r -d '' src_file; do
+		rel_path="${src_file#user/config/}"
+		dest_file="$USER_CONFIG/$rel_path"
+		if [ -e "$dest_file" ] && ! /usr/bin/cmp -s "$src_file" "$dest_file"; then
+			/usr/bin/cp -a "$dest_file" "${dest_file}${backup_suffix}"
+			backed_up+=("$dest_file")
+		fi
+	done < <(/usr/bin/find user/config/containers user/config/distrobox -type f -print0)
+
+	if [ ${#backed_up[@]} -gt 0 ]; then
+		echo -e "${color[yellow]}Warning: replacing existing config files. Backups saved with suffix ${backup_suffix}:${color[reset]}" 1>&2
+		for f in "${backed_up[@]}"; do
+			echo "  $f" 1>&2
+		done
+	fi
+
 	/usr/bin/cp -rft "$USER_CONFIG" user/config/containers user/config/distrobox
 	if [ ! -e "$TOWEL_BIN" ] && [ ! -L "$TOWEL_BIN" ]; then
 		created_towel_bin="true"
