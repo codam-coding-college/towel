@@ -64,7 +64,6 @@ function towel_remove_managed_symlink() {
 }
 
 function towel_export_bin_wrapper() {
-	local bin_path="$1"
 	local cmd_name
 	cmd_name="$(basename "$1")"
 	local export_dir
@@ -81,7 +80,7 @@ function towel_export_bin_wrapper() {
 # command: ${cmd_name}
 
 if [ -n "\$CONTAINER_ID" ] && [ "\$CONTAINER_ID" = "towel" ]; then
-	exec $bin_path "\$@"
+	exec "$cmd_name" "\$@"
 fi
 
 export TOWEL_FROM_EXPORT=1
