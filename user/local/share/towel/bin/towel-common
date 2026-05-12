@@ -20,6 +20,9 @@ function _towel_set_opts() {
 	if [ -n "$TOWEL_VERBOSE" ]; then
 		set -x
 	fi
+	if [ -n "$TOWEL_FROM_EXPORT" ]; then
+		export TOWEL_FROM_EXPORT
+	fi
 }
 
 function towel_exists() {
