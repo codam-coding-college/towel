@@ -110,7 +110,7 @@ function towel_export_desktop_wrapper() {
 	local exec_line
 	exec_line=$(grep "^Exec=" "$desktop_file" | head -n 1 | sed 's/^Exec=//')
 
-	local new_exec="Exec=env TOWEL_FROM_EXPORT=1 ${HOME}/.local/bin/towel exec ${exec_line}"
+	local new_exec="Exec=env TOWEL_FROM_EXPORT=1 TOWEL_DESKTOP_FILE=${target_file} ${HOME}/.local/bin/towel exec ${exec_line}"
 	local new_tryexec="TryExec=${HOME}/.local/bin/towel"
 
 	local tmp line
@@ -180,6 +180,25 @@ function towel_auto_export() {
 			fi
 		done <<<"$bin_files"
 	fi
+}
+
+function towel_remove_exported_desktop() {
+	local target_file="$1"
+	if [ -z "$target_file" ]; then
+		return
+	fi
+	local host_apps_dir
+	host_apps_dir="$(towel_host_apps_dir)"
+	local host_link
+	host_link="${host_apps_dir}/$(basename "$target_file")"
+
+	if [ -L "$host_link" ]; then
+		rm -f "$host_link"
+	fi
+	if [ -f "$target_file" ]; then
+		rm -f "$target_file"
+	fi
+	update-desktop-database "$host_apps_dir" >/dev/null 2>&1 || true
 }
 
 function towel_remove_exported_apps() {
