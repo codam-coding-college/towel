@@ -62,7 +62,6 @@ function towel_remove_managed_symlink() {
 
 function towel_export_bin_wrapper() {
 	local bin_path="$1"
-	cmd_name="$(basename "$1")"
 	local cmd_name
 	cmd_name="$(basename "$1")"
 	local export_dir
@@ -82,22 +81,8 @@ if [ -n "\$CONTAINER_ID" ] && [ "\$CONTAINER_ID" = "towel" ]; then
 	exec $bin_path "\$@"
 fi
 
-"\${HOME}/.local/bin/towel" exec "${cmd_name}" "\$@"
-ret=\$?
-if [ \$ret -ne 0 ]; then
-	read -p "Execution failed. Remove exported app? [y/N] " ans < /dev/tty 2>/dev/null || true
-	case "\$ans" in
-		[Yy]*)
-			link_path="\${HOME}/.local/bin/${cmd_name}"
-			real_path=\$(readlink -f "\$link_path" 2>/dev/null || true)
-			rm -f "\$link_path"
-			if [ -n "\$real_path" ]; then
-				rm -f "\$real_path"
-			fi
-			;;
-	esac
-fi
-exit \$ret
+export TOWEL_FROM_EXPORT=1
+exec "\${HOME}/.local/bin/towel" exec "${cmd_name}" "\$@"
 EOF
 	chmod +x "$wrapper_path"
 	ln -sfn "$wrapper_path" "$host_wrapper"
@@ -124,7 +109,7 @@ function towel_export_desktop_wrapper() {
 	local exec_line
 	exec_line=$(grep "^Exec=" "$desktop_file" | head -n 1 | sed 's/^Exec=//')
 	if [ -n "$exec_line" ]; then
-		sed -i "s|^Exec=.*|Exec=${HOME}/.local/bin/towel exec ${exec_line}|g" "$target_file"
+		sed -i "s|^Exec=.*|Exec=env TOWEL_FROM_EXPORT=1 ${HOME}/.local/bin/towel exec ${exec_line}|g" "$target_file"
 	fi
 
 	if grep -q "^TryExec=" "$target_file"; then

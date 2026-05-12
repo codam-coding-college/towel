@@ -10,6 +10,7 @@ if [ -z "${CONTAINER_ID}" ]; then
 	distrobox-enter -n towel -- "$@"
 	ret=$?
 	if [ $ret -ne 0 ]; then
+		[[ "${TOWEL_FROM_EXPORT:-}" == "1" ]] || exit $ret
 		should_prompt=false
 		if ! towel_exists; then
 			should_prompt=true
