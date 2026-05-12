@@ -60,7 +60,7 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	if ! command -v distrobox >/dev/null 2>&1; then
 		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox ${DISTROBOX_VERSION}...${color[reset]}"
 		distrobox_tmp_dir="$(/usr/bin/mktemp -d)"
-		curl -sSf "$DISTROBOX_URL" -o "$distrobox_tmp_dir/install" \
+		/usr/bin/curl -sSf "$DISTROBOX_URL" -o "$distrobox_tmp_dir/install" \
 			|| fatal "Failed to download distrobox installer from $DISTROBOX_URL. Please install it manually and re-run this installer."
 		actual_sha="$(/usr/bin/sha256sum "$distrobox_tmp_dir/install" | /usr/bin/awk '{print $1}')"
 		[ "$actual_sha" = "$DISTROBOX_SHA256" ] \
