@@ -36,6 +36,19 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 		exit 1
 	}
 
+	assume_yes="false"
+	for arg in "$@"; do
+		case "$arg" in
+		-y | --yes) assume_yes="true" ;;
+		-h | --help)
+			echo "Usage: install [-y|--yes] [-h|--help]"
+			echo "  -y, --yes   Skip the confirmation prompt"
+			exit 0
+			;;
+		*) fatal "Unknown argument: $arg" ;;
+		esac
+	done
+
 	test -n "$HOME" || fatal "HOME environment variable is not set. Cannot proceed with installation."
 
 	USER_CONFIG="$HOME/.config"
@@ -57,6 +70,37 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	test -n "$DISTROBOX_VERSION" && test -n "$DISTROBOX_URL" && test -n "$DISTROBOX_SHA256" \
 		|| fatal "Pin file is missing one of DISTROBOX_VERSION/URL/SHA256: $pin_file"
 
+	echo -e "${color[cyan]}Towel installer${color[reset]}"
+	echo "  - copy towel files to $TOWEL_DATA"
+	echo "  - symlink $TOWEL_BIN -> $TOWEL_DATA/bin/towel"
+	echo "  - copy distrobox/containers configs to $USER_CONFIG (existing files backed up)"
+	if ! command -v distrobox >/dev/null 2>&1; then
+		echo "  - download and install distrobox $DISTROBOX_VERSION from $DISTROBOX_URL"
+	fi
+	case "$SHELL" in
+	*bash) echo "  - ensure $HOME/.local/bin is on PATH in $HOME/.bashrc" ;;
+	*zsh) echo "  - ensure $HOME/.local/bin is on PATH in $HOME/.zshrc" ;;
+	esac
+
+	if [ "$assume_yes" != "true" ]; then
+		if [ -t 0 ]; then
+			builtin read -rp "Proceed? [y/N] " reply
+			case "$reply" in
+			y | Y | yes | Yes | YES) ;;
+			*)
+				trap - EXIT
+				echo "Aborted."
+				exit 0
+				;;
+			esac
+		else
+			fatal "Non-interactive shell: re-run with --yes to confirm."
+		fi
+	fi
+
+	### START INSTALLATION
+	cd "$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
+
 	if ! command -v distrobox >/dev/null 2>&1; then
 		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox ${DISTROBOX_VERSION}...${color[reset]}"
 		distrobox_tmp_dir="$(/usr/bin/mktemp -d)"
@@ -75,9 +119,6 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 			echo -e "${color[yellow]}Warning: distrobox $installed_distrobox_version is installed; towel was pinned to $DISTROBOX_VERSION. Continuing anyway.${color[reset]}" 1>&2
 		fi
 	fi
-
-	### START INSTALLATION
-	cd "$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
 
 	echo -e "${color[cyan]}Installing Towel...${color[reset]}"
 	echo "Copying files to $TOWEL_DATA and creating symlink at $TOWEL_BIN"
