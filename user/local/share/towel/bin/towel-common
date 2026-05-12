@@ -104,17 +104,33 @@ function towel_export_desktop_wrapper() {
 
 	mkdir -p "$export_dir"
 	mkdir -p "$(towel_host_apps_dir)"
-	cp -f "$desktop_file" "$target_file"
 
 	local exec_line
 	exec_line=$(grep "^Exec=" "$desktop_file" | head -n 1 | sed 's/^Exec=//')
-	if [ -n "$exec_line" ]; then
-		sed -i "s|^Exec=.*|Exec=env TOWEL_FROM_EXPORT=1 ${HOME}/.local/bin/towel exec ${exec_line}|g" "$target_file"
-	fi
 
-	if grep -q "^TryExec=" "$target_file"; then
-		sed -i "s|^TryExec=.*|TryExec=${HOME}/.local/bin/towel|g" "$target_file"
-	fi
+	local new_exec="Exec=env TOWEL_FROM_EXPORT=1 ${HOME}/.local/bin/towel exec ${exec_line}"
+	local new_tryexec="TryExec=${HOME}/.local/bin/towel"
+
+	local tmp line
+	tmp=$(mktemp "${target_file}.XXXXXX") || return 1
+	while IFS= read -r line || [ -n "$line" ]; do
+		case "$line" in
+		Exec=*)
+			if [ -n "$exec_line" ]; then
+				printf '%s\n' "$new_exec"
+			else
+				printf '%s\n' "$line"
+			fi
+			;;
+		TryExec=*)
+			printf '%s\n' "$new_tryexec"
+			;;
+		*)
+			printf '%s\n' "$line"
+			;;
+		esac
+	done <"$desktop_file" >"$tmp"
+	mv -f "$tmp" "$target_file"
 
 	if ! grep -q "^X-Towel-Exported=" "$target_file"; then
 		echo "X-Towel-Exported=true" >>"$target_file"
