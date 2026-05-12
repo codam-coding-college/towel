@@ -16,6 +16,12 @@ function towel_sanity_check() {
 	fi
 }
 
+function _towel_set_opts() {
+	if [ -n "$TOWEL_VERBOSE" ]; then
+		set -x
+	fi
+}
+
 function towel_exists() {
 	podman container exists towel >/dev/null 2>&1
 }
@@ -238,3 +244,5 @@ function towel_remove_exported_apps() {
 	[ -d "$export_bin_dir" ] && rm -rf "$export_bin_dir"
 	[ -d "$export_apps_dir" ] && rm -rf "$export_apps_dir"
 }
+
+_towel_set_opts
