@@ -39,7 +39,7 @@ fi
 
 sudo dnf install "${install_args[@]}"
 
-should_export=${should_export:-false}
+should_export=${assume_yes:-false}
 if [[ "$should_export" == false ]] && [ -t 0 ]; then
 	while builtin read -rp "Export installed apps/binaries to host now? [y/N] " answer; do
 		case "$answer" in
