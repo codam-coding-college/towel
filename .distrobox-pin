@@ -1,0 +1,4 @@
+# Pinned distrobox installer reference. Sourced by ./install.
+DISTROBOX_VERSION="1.8.2.5"
+DISTROBOX_URL="https://raw.githubusercontent.com/89luca89/distrobox/refs/tags/${DISTROBOX_VERSION}/install"
+DISTROBOX_SHA256="47ae0b3cde272641b3fe8c37d154118f8526c63168f32a44ef2f6108a0f49df6"

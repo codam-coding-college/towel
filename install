@@ -10,6 +10,9 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	declare -rA color=([reset]="\033[0m" [black]="\033[30m" [red]="\033[31m" [green]="\033[32m" [yellow]="\033[33m" [blue]="\033[34m" [purple]="\033[35m" [cyan]="\033[36m" [white]="\033[37m")
 
 	function cleanup() {
+		if [ -n "$distrobox_tmp_dir" ] && [ -d "$distrobox_tmp_dir" ]; then
+			/usr/bin/rm -rf "$distrobox_tmp_dir"
+		fi
 		echo -e "${color[reset]}${color[red]}Installation failed. Cleaning up...${color[reset]}" 1>&2
 		if [ "$created_towel_data" = "true" ] && [ -n "$TOWEL_DATA" ] && [ "$TOWEL_DATA" = "$HOME/.local/share/towel" ]; then
 			/usr/bin/rm -rf "$TOWEL_DATA"
@@ -42,14 +45,36 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	created_towel_bin="false"
 	backup_suffix=""
 	backed_up=()
-	
-	distrobox_url="https://raw.githubusercontent.com/89luca89/distrobox/refs/tags/1.8.2.5/install"
-	if ! command -v distrobox >/dev/null 2>&1; then
-		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox...${color[reset]}"
-		curl -s "$distrobox_url" | sh -s -- --prefix="$HOME/.local" || fatal "Failed to install distrobox. Please install it manually and re-run this installer."
-	fi
+	distrobox_tmp_dir=""
 
 	trap cleanup EXIT
+
+	SCRIPT_DIR="$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
+	pin_file="$SCRIPT_DIR/.distrobox-pin"
+	test -f "$pin_file" || fatal "Pin file not found: $pin_file"
+	# shellcheck source=.distrobox-pin
+	source "$pin_file"
+	test -n "$DISTROBOX_VERSION" && test -n "$DISTROBOX_URL" && test -n "$DISTROBOX_SHA256" \
+		|| fatal "Pin file is missing one of DISTROBOX_VERSION/URL/SHA256: $pin_file"
+
+	if ! command -v distrobox >/dev/null 2>&1; then
+		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox ${DISTROBOX_VERSION}...${color[reset]}"
+		distrobox_tmp_dir="$(/usr/bin/mktemp -d)"
+		curl -sSf "$DISTROBOX_URL" -o "$distrobox_tmp_dir/install" \
+			|| fatal "Failed to download distrobox installer from $DISTROBOX_URL. Please install it manually and re-run this installer."
+		actual_sha="$(/usr/bin/sha256sum "$distrobox_tmp_dir/install" | /usr/bin/awk '{print $1}')"
+		[ "$actual_sha" = "$DISTROBOX_SHA256" ] \
+			|| fatal "distrobox installer checksum mismatch: expected $DISTROBOX_SHA256, got $actual_sha. Please install distrobox manually and re-run this installer."
+		sh "$distrobox_tmp_dir/install" --prefix="$HOME/.local" \
+			|| fatal "Failed to install distrobox. Please install it manually and re-run this installer."
+		/usr/bin/rm -rf "$distrobox_tmp_dir"
+		distrobox_tmp_dir=""
+	else
+		installed_distrobox_version="$(distrobox version 2>/dev/null | /usr/bin/awk -F': ' '/^distrobox:/{print $2; exit}')"
+		if [ -n "$installed_distrobox_version" ] && [ "$installed_distrobox_version" != "$DISTROBOX_VERSION" ]; then
+			echo -e "${color[yellow]}Warning: distrobox $installed_distrobox_version is installed; towel was pinned to $DISTROBOX_VERSION. Continuing anyway.${color[reset]}" 1>&2
+		fi
+	fi
 
 	### START INSTALLATION
 	cd "$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
