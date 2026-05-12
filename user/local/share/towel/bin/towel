@@ -4,7 +4,7 @@ declare -ra bltins=(builtin cd continue declare echo exit getopts read return se
 enable >/dev/null 2>&1 "${bltins[@]}"
 unalias >/dev/null 2>&1 "${bltins[@]}"
 
-set -e
+# set -e
 
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
 TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
