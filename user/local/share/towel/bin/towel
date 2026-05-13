@@ -1,48 +1,64 @@
 #!/usr/bin/env bash
 
-bltins=(builtin cd command continue declare echo exit getopts read return set shift source test trap unalias unset)
-enable > /dev/null 2>&1 "${bltins[@]}"
-unalias > /dev/null 2>&1 "${bltins[@]}"
+declare -ra bltins=(builtin cd continue declare echo exit getopts read return set shift source test trap unalias unset)
+enable >/dev/null 2>&1 "${bltins[@]}"
+unalias >/dev/null 2>&1 "${bltins[@]}"
 
-set -e
+# set -e
 
-if [ -z "$TOWEL_DATA" ]; then
-	if command -v realpath; then
-		TOWEL_DATA="$(/usr/bin/dirname "$(/usr/bin/realpath -e "$0")/..")"
-	elif command -v readlink; then
-		TOWEL_DATA="$(/usr/bin/dirname "$(/usr/bin/readlink -e "$0")/..")"
-	else
-		echo 1>&2 "Cannot determine script directory. Please ensure realpath or readlink is installed, or set TOWEL_DATA environment variable."
-		exit 1
-	fi
-fi
-TOWEL_LIB=${TOWEL_LIB:-"$TOWEL_DATA/lib"}
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 
-if [ ! -d "$TOWEL_LIB" ]; then
-	echo 1>&2 "Towel library not found at $TOWEL_LIB"
+if [ ! -d "$TOWEL_BIN_DIR" ]; then
+	echo 1>&2 "Towel commands not found at $TOWEL_BIN_DIR"
 	exit 1
 fi
 
-source "$TOWEL_LIB/opts"
-source "$TOWEL_LIB/help"
-source "$TOWEL_LIB/run"
+function print_help() {
+	"$TOWEL_BIN_DIR/towel-help"
+}
 
-declare -A arg_handlers=([create]="towel_create" [exec]="towel_exec" [enter]="towel_enter" [export]="towel_export" [install]="towel_install" [remove]="towel_remove")
-declare -A opt_handlers=([-h]="print_help")
-
-while [[ $# -gt 0 ]]; do
-	arg="$1"
-	if [[ " ${!opt_handlers[*]} " == *" $arg "* ]]; then
-		handler="${opt_handlers[$arg]}"
-		shift
-		"$handler" "$@"
-	elif [[ " ${!arg_handlers[*]} " == *" $arg "* ]]; then
-		shift
-		exec "${arg_handlers[$arg]}" "$@"
+function print_version() {
+	local version_file="$TOWEL_DATA/VERSION"
+	if [ -f "$version_file" ]; then
+		printf 'towel %s\n' "$(cat "$version_file")"
 	else
-		[[ "$arg" == -* ]] && unknown_option "$arg" 
-		unknown_command "$arg"
-		exit 1
+		echo "towel (unknown version)" 1>&2
 	fi
-	exec ${arg_handlers[enter]} "$@"
-done
+}
+
+function unknown_command() {
+	echo 1>&2 "Unknown command \`towel $1'"
+	echo 1>&2 "Try \`towel -h'"
+	exit 1
+}
+
+function unknown_option() {
+	echo 1>&2 "Unknown option \`towel $1'"
+	echo 1>&2 "Try \`towel -h'"
+	exit 1
+}
+
+if [ $# -eq 0 ]; then
+	exec "$TOWEL_BIN_DIR/towel-enter"
+fi
+
+cmd="$1"
+shift
+case "$cmd" in
+-h | --help)
+	print_help
+	;;
+-v | --version)
+	print_version
+	;;
+create | exec | enter | export | install | remove)
+	"$TOWEL_BIN_DIR/towel-$cmd" "$@"
+	;;
+-*)
+	unknown_option "$cmd"
+	;;
+*)
+	unknown_command "$cmd"
+	;;
+esac

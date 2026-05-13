@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
+
+# shellcheck source=user/local/share/towel/bin/towel-common
+source "$TOWEL_BIN_DIR/towel-common"
+
+ret=0
+if [ -z "${CONTAINER_ID}" ]; then
+	distrobox-enter -n towel -- "$@"
+	ret=$?
+	if [ $ret -ne 0 ]; then
+		[[ "${TOWEL_FROM_EXPORT:-}" == "1" ]] || exit $ret
+
+		if [ -n "${TOWEL_DESKTOP_FILE:-}" ]; then
+			display="$(basename "$TOWEL_DESKTOP_FILE" .desktop)"
+			display="${display#towel-}"
+		else
+			display="$1"
+		fi
+
+		should_prompt=false
+		if ! towel_exists; then
+			should_prompt=true
+			msg="Container 'towel' does not exist."
+		elif [ "$ret" -eq 127 ]; then
+			should_prompt=true
+			msg="Command for '$display' not found in towel."
+		elif [ -z "${TOWEL_DESKTOP_FILE:-}" ] && ! distrobox-enter -n towel -- command -v "$1" >/dev/null 2>&1; then
+			should_prompt=true
+			msg="Command '$1' not found in towel."
+		fi
+
+		msg="${msg:-"Command failed."}"
+		if [[ "$should_prompt" == true ]]; then
+			ans="n"
+			if [ -t 0 ]; then
+				read -rp "towel: $msg Remove exported app? [y/N] " ans </dev/tty || true
+			else
+				if command -v zenity >/dev/null 2>&1; then
+					zenity --question --icon-name="warning" --title="$display on towel" --text="$msg Remove exported app?" && ans="y" || ans="n"
+				fi
+			fi
+			case "$ans" in
+			[Yy]*)
+				if [ -n "${TOWEL_DESKTOP_FILE:-}" ]; then
+					towel_remove_exported_desktop "$TOWEL_DESKTOP_FILE"
+				else
+					towel_remove_exported_apps "$1"
+				fi
+				;;
+			esac
+		fi
+	fi
+	exit $ret
+elif ! inside_towel; then
+	exec distrobox-host-exec "$HOME/.local/bin/towel" exec "$@"
+else
+	exec "$@"
+fi

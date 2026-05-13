@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+echo 1>&2 \
+	"A towel is just about the most massively useful thing an interstellar hitchhiker can carry.
+
+Usage:
+  towel [options] [command]
+  'enter' is default if no command is given
+
+Available Commands:
+  create   Create towel container
+  enter    Enter towel container
+  export   Export installed package apps/binaries to host-managed wrappers
+  install  Install package inside the towel container (prompts for host export)
+  remove   Remove towel container, cannot be undone
+
+Install Options:
+  -y, --yes  Assume yes to export prompt during install
+
+Options:
+  -h       Print this help text"

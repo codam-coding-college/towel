@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
+
+# shellcheck source=user/local/share/towel/bin/towel-common
+source "$TOWEL_BIN_DIR/towel-common"
+
+assume_yes=""
+install_args=()
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-y | --yes)
+		assume_yes="--yes"
+		shift
+		;;
+	--)
+		shift
+		;;&
+	*)
+		while [[ $# -gt 0 ]]; do
+			install_args+=("$1")
+			shift
+		done
+		break
+		;;
+	esac
+done
+
+if [ ${#install_args[@]} -eq 0 ]; then
+	builtin echo "No package specified." 1>&2
+	exit 1
+fi
+
+if [ -z "${CONTAINER_ID}" ]; then
+	exec distrobox-enter -n towel -- "$HOME/.local/bin/towel" install $assume_yes "${install_args[@]}"
+elif ! inside_towel; then
+	exec distrobox-host-exec "$HOME/.local/bin/towel" install $assume_yes "${install_args[@]}"
+fi
+
+sudo dnf install "${install_args[@]}"
+
+if [[ -n "$assume_yes" ]]; then
+	should_export=true
+elif [ -t 0 ]; then
+	should_export=false
+	while builtin read -rp "Export installed apps/binaries to host now? [y/N] " answer; do
+		case "$answer" in
+		y | yes | Y | Yes | YES)
+			should_export=true
+			break
+			;;
+		n | no | N | No | NO | "")
+			break
+			;;
+		*)
+			echo "Invalid input." 1>&2
+			;;
+		esac
+	done
+else
+	should_export=false
+fi
+
+if [[ "$should_export" == true ]]; then
+	for pkg in "${install_args[@]}"; do
+		towel_auto_export "$pkg"
+	done
+fi

@@ -1,83 +1,211 @@
 #!/usr/bin/env bash
 
-bltins=(builtin cd continue declare echo exit getopts read return set source test trap unalias unset)
-enable "${bltins[@]}" > /dev/null 2>&1
-unalias "${bltins[@]}" > /dev/null 2>&1
+declare -ra bltins=(builtin cd continue declare echo exit getopts read return set source test trap unalias unset)
+enable "${bltins[@]}" >/dev/null 2>&1
+unalias "${bltins[@]}" >/dev/null 2>&1
 
 { # Makes sure the entire script is downloaded before execution.
-set -e
+	set -e
 
-declare -A color=([reset]="\033[0m" [black]="\033[30m" [red]="\033[31m" [green]="\033[32m" [yellow]="\033[33m" [blue]="\033[34m" [purple]="\033[35m" [cyan]="\033[36m" [white]="\033[37m")
+	declare -rA color=([reset]="\033[0m" [black]="\033[30m" [red]="\033[31m" [green]="\033[32m" [yellow]="\033[33m" [blue]="\033[34m" [purple]="\033[35m" [cyan]="\033[36m" [white]="\033[37m")
 
-function cleanup () {
-	echo -e 1>&2 ${color[reset]}${color[red]}"Installation failed. Cleaning up..."${color[reset]}
-	/usr/bin/rm -rf "$TOWEL_DATA"
-	/usr/bin/rm -rf "$TOWEL_BIN"
-}
+	function cleanup() {
+		if [ -n "$distrobox_tmp_dir" ] && [ -d "$distrobox_tmp_dir" ]; then
+			/usr/bin/rm -rf "$distrobox_tmp_dir"
+		fi
+		echo -e "${color[reset]}${color[red]}Installation failed. Cleaning up...${color[reset]}" 1>&2
+		if [ "$created_towel_data" = "true" ] && [ -n "$TOWEL_DATA" ] && [ "$TOWEL_DATA" = "$HOME/.local/share/towel" ]; then
+			/usr/bin/rm -rf "$TOWEL_DATA"
+		fi
+		if [ "$created_towel_bin" = "true" ] && [ -n "$TOWEL_BIN" ] && [ "$TOWEL_BIN" = "$HOME/.local/bin/towel" ]; then
+			/usr/bin/rm -rf "$TOWEL_BIN"
+		fi
+		if [ -n "$backup_suffix" ] && [ ${#backed_up[@]} -gt 0 ]; then
+			echo -e "${color[yellow]}Restoring config backups...${color[reset]}" 1>&2
+			for dest_file in "${backed_up[@]}"; do
+				if [ -e "${dest_file}${backup_suffix}" ]; then
+					/usr/bin/mv -f "${dest_file}${backup_suffix}" "$dest_file"
+				fi
+			done
+		fi
+	}
 
-function fatal () {
-	echo -ne ${color[reset]}
-	echo "$@" 1>&2
-	echo -ne ${color[reset]}
-	exit 1
-}
+	function fatal() {
+		echo -ne "${color[reset]}"
+		echo "$@" 1>&2
+		exit 1
+	}
 
-function _manual_dir_check () {
-	local dir
-	dir="$(/usr/bin/dirname "$0")"
-	if [ -d "$dir" ] && [ -d "$dir/user" ] && [ -d "$dir/system" ]; then
-		echo "$dir"
+	assume_yes="false"
+	for arg in "$@"; do
+		case "$arg" in
+		-y | --yes) assume_yes="true" ;;
+		-h | --help)
+			echo "Usage: install [-y|--yes] [-h|--help]"
+			echo "  -y, --yes   Skip the confirmation prompt"
+			exit 0
+			;;
+		*) fatal "Unknown argument: $arg" ;;
+		esac
+	done
+
+	test -n "$HOME" || fatal "HOME environment variable is not set. Cannot proceed with installation."
+
+	USER_CONFIG="$HOME/.config"
+	TOWEL_DATA="$HOME/.local/share/towel"
+	TOWEL_BIN="$HOME/.local/bin/towel"
+	created_towel_data="false"
+	created_towel_bin="false"
+	backup_suffix=""
+	backed_up=()
+	distrobox_tmp_dir=""
+
+	trap cleanup EXIT
+
+	SCRIPT_DIR="$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
+	pin_file="$SCRIPT_DIR/.distrobox-pin"
+	test -f "$pin_file" || fatal "Pin file not found: $pin_file"
+	# shellcheck source=.distrobox-pin
+	source "$pin_file"
+	if [ -z "$DISTROBOX_VERSION" ] || [ -z "$DISTROBOX_URL" ] || [ -z "$DISTROBOX_SHA256" ]; then
+		fatal "Pin file is missing one of DISTROBOX_VERSION/URL/SHA256: $pin_file"
+	fi
+
+	echo -e "${color[cyan]}Towel installer${color[reset]}"
+	echo "  - copy towel files to $TOWEL_DATA"
+	echo "  - symlink $TOWEL_BIN -> $TOWEL_DATA/bin/towel"
+	echo "  - copy distrobox/containers configs to $USER_CONFIG (existing files backed up)"
+	if ! command -v distrobox >/dev/null 2>&1; then
+		echo "  - download and install distrobox $DISTROBOX_VERSION from $DISTROBOX_URL"
+	fi
+	case "$SHELL" in
+	*bash) echo "  - ensure $HOME/.local/bin is on PATH in $HOME/.bashrc" ;;
+	*zsh) echo "  - ensure $HOME/.local/bin is on PATH in $HOME/.zshrc" ;;
+	esac
+
+	if [ "$assume_yes" != "true" ]; then
+		if [ -t 0 ]; then
+			builtin read -rp "Proceed? [y/N] " reply
+			case "$reply" in
+			y | Y | yes | Yes | YES) ;;
+			*)
+				trap - EXIT
+				echo "Aborted."
+				exit 0
+				;;
+			esac
+		else
+			fatal "Non-interactive shell: re-run with --yes to confirm."
+		fi
+	fi
+
+	### START INSTALLATION
+	cd "$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
+
+	if ! command -v distrobox >/dev/null 2>&1; then
+		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox ${DISTROBOX_VERSION}...${color[reset]}"
+		distrobox_tmp_dir="$(/usr/bin/mktemp -d)"
+		/usr/bin/curl -sSf "$DISTROBOX_URL" -o "$distrobox_tmp_dir/install" ||
+			fatal "Failed to download distrobox installer from $DISTROBOX_URL. Please install it manually and re-run this installer."
+		actual_sha="$(/usr/bin/sha256sum "$distrobox_tmp_dir/install" | /usr/bin/awk '{print $1}')"
+		[ "$actual_sha" = "$DISTROBOX_SHA256" ] ||
+			fatal "distrobox installer checksum mismatch: expected $DISTROBOX_SHA256, got $actual_sha. Please install distrobox manually and re-run this installer."
+		sh "$distrobox_tmp_dir/install" --prefix="$HOME/.local" ||
+			fatal "Failed to install distrobox. Please install it manually and re-run this installer."
+		/usr/bin/rm -rf "$distrobox_tmp_dir"
+		distrobox_tmp_dir=""
 	else
-		fatal "Cannot find necessary directories. Please ensure you are running the installer from the correct location or install realpath/readlink."
+		installed_distrobox_version="$(distrobox version 2>/dev/null | /usr/bin/awk -F': ' '/^distrobox:/{print $2; exit}')"
+		if [ -n "$installed_distrobox_version" ] && [ "$installed_distrobox_version" != "$DISTROBOX_VERSION" ]; then
+			echo -e "${color[yellow]}Warning: distrobox $installed_distrobox_version is installed; towel was pinned to $DISTROBOX_VERSION. Continuing anyway.${color[reset]}" 1>&2
+		fi
 	fi
-}
 
-test -n "$HOME" || fatal "HOME environment variable is not set. Cannot proceed with installation."
-
-USER_CONFIG="$HOME/.config"
-TOWEL_DATA="$HOME/.local/share/towel"
-TOWEL_BIN="$HOME/.local/bin/towel"
-
-trap cleanup EXIT
-
-### START INSTALLATION
-if [ -x /usr/bin/realpath ]; then
-	cd "$(/usr/bin/dirname "$(/usr/bin/readpath -e "$0")")"
-elif [ -x /usr/bin/readlink ]; then
-	cd "$(/usr/bin/dirname "$(/usr/bin/readlink -e "$0")")"
-else
-	cd "$(_manual_dir_check)"
-fi
-
-echo -e "${color[cyan]}Installing Towel...${color[reset]}"
-echo Copying files to "$TOWEL_DATA" and creating symlink at "$TOWEL_BIN"
-/usr/bin/mkdir -p "$TOWEL_DATA"
-/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
-
-/usr/bin/cp -rt "$TOWEL_DATA" user/local/share/towel/*
-/usr/bin/cp -rt "$USER_CONFIG" user/config/containers
-/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
-
-echo -e "${color[green]}Files copied successfully.${color[reset]}"
-echo -e "${color[cyan]}Ensuring $HOME/.local/bin is in PATH...${color[reset]}"
-
-case $SHELL in
-	*bash) rc="$HOME/.bashrc";;
-	*zsh) rc="$HOME/.zshrc";;
-	*) rc="";;
-esac
-
-if [ -n "$rc" ]; then
-	if ! [[ "$PATH" =~ (^|:)"$HOME/.local/bin"(:|$) ]]; then
-		# shellcheck disable=SC2016
-		echo 'export PATH="$HOME/.local/bin:${PATH:+:$PATH}"' >> "$rc"
-		echo -e "${color[green]}Added \$HOME/.local/bin to PATH in $rc${color[reset]}"
+	echo -e "${color[cyan]}Installing Towel...${color[reset]}"
+	echo "Copying files to $TOWEL_DATA and creating symlink at $TOWEL_BIN"
+	if [ ! -d "$TOWEL_DATA" ]; then
+		created_towel_data="true"
 	fi
-else
-	echo -e "${color[red]}Warning: Could not detect shell. Please ensure that $HOME/.local/bin is in your PATH.${color[reset]}"
-fi
+	/usr/bin/mkdir -p "$TOWEL_DATA"
+	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
+	/usr/bin/mkdir -p "$USER_CONFIG"
 
-echo -e "${color[green]}Installation complete! Restart your shell to start using towel.${color[reset]}"
-trap - EXIT
-### END INSTALLATION
+	/usr/bin/cp -rft "$TOWEL_DATA/.." user/local/share/towel
+
+	backup_suffix=".bak.$(/usr/bin/date +%Y%m%d%H%M%S)"
+	backed_up=()
+	while IFS= read -r -d '' src_file; do
+		rel_path="${src_file#user/config/}"
+		dest_file="$USER_CONFIG/$rel_path"
+		if [ -e "$dest_file" ] && ! /usr/bin/cmp -s "$src_file" "$dest_file"; then
+			/usr/bin/cp -a "$dest_file" "${dest_file}${backup_suffix}"
+			backed_up+=("$dest_file")
+		fi
+	done < <(/usr/bin/find user/config/containers user/config/distrobox -type f -print0)
+
+	if [ ${#backed_up[@]} -gt 0 ]; then
+		echo -e "${color[yellow]}Warning: replacing existing config files. Backups saved with suffix ${backup_suffix}:${color[reset]}" 1>&2
+		for f in "${backed_up[@]}"; do
+			echo "  $f" 1>&2
+		done
+	fi
+
+	/usr/bin/cp -rft "$USER_CONFIG" user/config/containers user/config/distrobox
+	if [ ! -e "$TOWEL_BIN" ] && [ ! -L "$TOWEL_BIN" ]; then
+		created_towel_bin="true"
+	fi
+	/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
+	/usr/bin/cp -f VERSION "$TOWEL_DATA/VERSION"
+
+	echo -e "${color[green]}Files copied successfully.${color[reset]}"
+	echo -e "${color[cyan]}Ensuring $HOME/.local/bin is in PATH...${color[reset]}"
+
+	case $SHELL in
+	*bash) rc="$HOME/.bashrc" ;;
+	*zsh) rc="$HOME/.zshrc" ;;
+	*) rc="" ;;
+	esac
+
+	if [ -n "$rc" ]; then
+		# shellcheck disable=SC2016 # Justification: Match/write a literal rc line; expansion should happen at shell startup.
+		path_export_line='export PATH="$HOME/.local/bin${PATH:+:$PATH}"'
+		# shellcheck disable=SC2016 # Justification: Pattern intentionally matches literal shell syntax in rc files.
+		path_token_regex='(^|[^[:alnum:]_])((\$HOME|~)/\.local/bin)([^[:alnum:]_]|$)'
+		if /usr/bin/grep -Fqx "$path_export_line" "$rc" 2>/dev/null; then
+			:
+		elif /usr/bin/grep -Eq "$path_token_regex" "$rc" 2>/dev/null; then
+			echo -e "${color[green]}Detected an existing \$HOME/.local/bin PATH entry in $rc. Skipping.${color[reset]}"
+		elif [[ "$PATH" =~ (^|:)"$HOME/.local/bin"(:|$) ]]; then
+			echo -e "${color[yellow]}$HOME/.local/bin is already in current PATH, but no clear entry was found in $rc.${color[reset]}"
+			if [ -t 0 ]; then
+				while builtin read -rp "Append PATH export to $rc anyway? [y/N] "; do
+					case "$REPLY" in
+					y | yes | Y | Yes | YES)
+						echo "$path_export_line" >>"$rc"
+						echo -e "${color[green]}Added \$HOME/.local/bin to PATH in $rc${color[reset]}"
+						break
+						;;
+					n | no | N | No | NO | "")
+						echo -e "${color[cyan]}Skipped PATH update in $rc.${color[reset]}"
+						break
+						;;
+					*)
+						echo "Invalid input." 1>&2
+						;;
+					esac
+				done
+			else
+				echo -e "${color[yellow]}Non-interactive shell: skipping PATH update to avoid duplicate entries.${color[reset]}"
+			fi
+		else
+			echo "$path_export_line" >>"$rc"
+			echo -e "${color[green]}Added \$HOME/.local/bin to PATH in $rc${color[reset]}"
+		fi
+	else
+		echo -e "${color[red]}Warning: Could not detect shell. Please ensure that $HOME/.local/bin is in your PATH.${color[reset]}"
+	fi
+
+	echo -e "${color[green]}Installation complete! Restart your shell to start using towel.${color[reset]}"
+	trap - EXIT
+	### END INSTALLATION
 }

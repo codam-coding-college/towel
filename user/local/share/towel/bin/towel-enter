@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
+
+# shellcheck source=user/local/share/towel/bin/towel-common
+source "$TOWEL_BIN_DIR/towel-common"
+
+towel_sanity_check
+if [ -n "$CONTAINER_ID" ]; then
+	exec distrobox-host-exec "$HOME/.local/bin/towel" enter
+elif ! towel_exists; then
+	builtin echo "No such container towel"
+	while builtin read -rp "Create it now? yes|No:"; do
+		case "$REPLY" in
+		y | yes | Y | Yes | YES)
+			towel create
+			break
+			;;
+		n | no | N | No | NO)
+			exit
+			;;
+		*)
+			echo "Invalid input." 1>&2
+			;;
+		esac
+		exit 1
+	done
+fi
+distrobox enter towel

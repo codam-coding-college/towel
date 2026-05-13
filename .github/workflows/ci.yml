@@ -1,0 +1,114 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Lint
+        run: |
+          shellcheck -x install \
+            user/local/share/towel/bin/towel \
+            user/local/share/towel/bin/towel-*
+
+  shfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shfmt v3.8.0
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL -o "$HOME/.local/bin/shfmt" \
+            https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_linux_amd64
+          chmod +x "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Format check
+        run: |
+          shfmt -d install \
+            user/local/share/towel/bin/towel \
+            user/local/share/towel/bin/towel-*
+
+  pr-title-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            ci
+            build
+            perf
+            revert
+            style
+
+  install-smoke:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Install host prereqs
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            bash curl ca-certificates git findutils grep sed coreutils sudo
+      - uses: actions/checkout@v4
+      - name: Create unprivileged user and run installer
+        run: |
+          useradd -m -s /bin/bash testuser
+          chown -R testuser:testuser "$GITHUB_WORKSPACE"
+          su - testuser -c "cd '$GITHUB_WORKSPACE' && SHELL=/bin/bash ./install -y"
+      - name: Assert install layout
+        run: |
+          # shellcheck disable=SC2016 # Justification: $HOME must expand inside testuser's login shell, not the outer one.
+          su - testuser -c '
+            set -e
+            test -L "$HOME/.local/bin/towel"
+            test -f "$HOME/.local/share/towel/VERSION"
+            cmp -s "$HOME/.local/share/towel/VERSION" "'"$GITHUB_WORKSPACE"'/VERSION"
+            "$HOME/.local/bin/towel" --version | grep -E "^towel [0-9]+\.[0-9]+\.[0-9]+$"
+            "$HOME/.local/bin/towel" -h >/dev/null 2>&1 || true
+          '
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [shellcheck, shfmt, install-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release

@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2034 # Justification: consumed by subcommands that source this file.
+TOWEL_INI="$HOME/.config/distrobox/towel.ini"
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR="${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}"
+TOWEL_EXPORTS="${TOWEL_DATA:-${HOME}/.local/share/towel}/exports"
+# shellcheck disable=SC2034 # Justification: consumed by subcommands that source this file.
+TOWEL_VERSION="$(cat "$TOWEL_DATA/VERSION" 2>/dev/null || echo unknown)"
+
+function inside_towel() {
+	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] >/dev/null 2>&1
+}
+
+function towel_sanity_check() {
+	if [ -n "$CONTAINER_ID" ]; then
+		builtin echo "Command shouldn't be run inside a container, rerun command on the host system." 1>&2
+		exit 1
+	fi
+}
+
+function _towel_set_opts() {
+	if [ -n "$TOWEL_VERBOSE" ]; then
+		set -x
+	fi
+	if [ -n "$TOWEL_FROM_EXPORT" ]; then
+		export TOWEL_FROM_EXPORT
+	fi
+}
+
+function towel_exists() {
+	podman container exists towel >/dev/null 2>&1
+}
+
+function towel_exports_bin_dir() {
+	echo "$TOWEL_EXPORTS/bin"
+}
+
+function towel_exports_apps_dir() {
+	echo "$TOWEL_EXPORTS/applications"
+}
+
+function towel_host_bin_dir() {
+	echo "${HOME}/.local/bin"
+}
+
+function towel_host_apps_dir() {
+	echo "${HOME}/.local/share/applications"
+}
+
+function towel_remove_managed_symlink() {
+	local link_path="$1"
+	local exports_dir="$2"
+
+	if [ ! -L "$link_path" ]; then
+		return
+	fi
+
+	local target_path
+	target_path=$(readlink "$link_path" 2>/dev/null) || true
+	case "$target_path" in
+	"${exports_dir}"/*)
+		rm -f "$link_path"
+		[ -f "$target_path" ] && rm -f "$target_path"
+		;;
+	esac
+}
+
+function towel_export_bin_wrapper() {
+	local cmd_name
+	cmd_name="$(basename "$1")"
+	local export_dir
+	export_dir="$(towel_exports_bin_dir)"
+	local wrapper_path="${export_dir}/${cmd_name}"
+	local host_wrapper
+	host_wrapper="$(towel_host_bin_dir)/${cmd_name}"
+
+	mkdir -p "$export_dir"
+	mkdir -p "$(towel_host_bin_dir)"
+	cat >"$wrapper_path" <<EOF
+#!/usr/bin/env bash
+# name: towel
+# command: ${cmd_name}
+
+if [ -n "\$CONTAINER_ID" ] && [ "\$CONTAINER_ID" = "towel" ]; then
+	exec "$cmd_name" "\$@"
+fi
+
+export TOWEL_FROM_EXPORT=1
+exec "\${HOME}/.local/bin/towel" exec "${cmd_name}" "\$@"
+EOF
+	chmod +x "$wrapper_path"
+	ln -sfn "$wrapper_path" "$host_wrapper"
+}
+
+function towel_export_desktop_wrapper() {
+	local desktop_file="$1"
+	local desktop_name
+	desktop_name="$(basename "$desktop_file")"
+	local export_dir
+	export_dir="$(towel_exports_apps_dir)"
+	local target_file="${export_dir}/towel-${desktop_name}"
+	local host_desktop
+	host_desktop="$(towel_host_apps_dir)/towel-${desktop_name}"
+
+	if [ ! -f "$desktop_file" ]; then
+		return
+	fi
+
+	mkdir -p "$export_dir"
+	mkdir -p "$(towel_host_apps_dir)"
+
+	local exec_line
+	exec_line=$(grep "^Exec=" "$desktop_file" | head -n 1 | sed 's/^Exec=//')
+
+	local new_exec="Exec=env TOWEL_FROM_EXPORT=1 TOWEL_DESKTOP_FILE=${target_file} ${HOME}/.local/bin/towel exec ${exec_line}"
+	local new_tryexec="TryExec=${HOME}/.local/bin/towel"
+
+	local tmp line
+	tmp=$(mktemp "${target_file}.XXXXXX") || return 1
+	while IFS= read -r line || [ -n "$line" ]; do
+		case "$line" in
+		Exec=*)
+			if [ -n "$exec_line" ]; then
+				printf '%s\n' "$new_exec"
+			else
+				printf '%s\n' "$line"
+			fi
+			;;
+		TryExec=*)
+			printf '%s\n' "$new_tryexec"
+			;;
+		*)
+			printf '%s\n' "$line"
+			;;
+		esac
+	done <"$desktop_file" >"$tmp"
+	mv -f "$tmp" "$target_file"
+
+	if ! grep -q "^X-Towel-Exported=" "$target_file"; then
+		echo "X-Towel-Exported=true" >>"$target_file"
+	fi
+
+	ln -sfn "$target_file" "$host_desktop"
+	update-desktop-database "$(towel_host_apps_dir)" >/dev/null 2>&1 || true
+}
+
+function towel_repoquery_exportables() {
+	local pkg="$1"
+	local bins_regex='/usr/bin/\S+'
+	local desktops_regex='/usr/share/applications/\S+\.desktop'
+
+	dnf repoquery -l "$pkg" 2>/dev/null | grep -oE '^('"$bins_regex"'|'"$desktops_regex"')$' 2>/dev/null | sort -u
+}
+
+function towel_auto_export() {
+	if ! inside_towel; then
+		return
+	fi
+
+	local files
+	files=$(towel_repoquery_exportables "$1")
+	if [ -z "$files" ]; then
+		return
+	fi
+
+	local desktop_files
+	desktop_files=$(grep -E '^/usr/share/applications/\S+\.desktop$' <<<"$files") || true
+	if [ -n "$desktop_files" ]; then
+		while IFS= read -r desktop_file; do
+			if [ -e "$desktop_file" ]; then
+				towel_export_desktop_wrapper "$desktop_file"
+			fi
+		done <<<"$desktop_files"
+	fi
+
+	local bin_files
+	bin_files=$(grep -E '^/usr/bin/\S+$' <<<"$files") || true
+	if [ -n "$bin_files" ]; then
+		while IFS= read -r bin_file; do
+			if [ -e "$bin_file" ]; then
+				towel_export_bin_wrapper "$bin_file"
+			fi
+		done <<<"$bin_files"
+	fi
+}
+
+function towel_remove_exported_desktop() {
+	local target_file="$1"
+	if [ -z "$target_file" ]; then
+		return
+	fi
+	local host_apps_dir
+	host_apps_dir="$(towel_host_apps_dir)"
+	local host_link
+	host_link="${host_apps_dir}/$(basename "$target_file")"
+
+	if [ -L "$host_link" ]; then
+		rm -f "$host_link"
+	fi
+	if [ -f "$target_file" ]; then
+		rm -f "$target_file"
+	fi
+	update-desktop-database "$host_apps_dir" >/dev/null 2>&1 || true
+}
+
+function towel_remove_exported_apps() {
+	local target_app="${1:-}"
+	local host_bin_dir
+	host_bin_dir="$(towel_host_bin_dir)"
+	local host_apps_dir
+	host_apps_dir="$(towel_host_apps_dir)"
+	local export_bin_dir
+	export_bin_dir="$(towel_exports_bin_dir)"
+	local export_apps_dir
+	export_apps_dir="$(towel_exports_apps_dir)"
+
+	if [ -n "$target_app" ]; then
+		if [ -d "$host_bin_dir" ]; then
+			towel_remove_managed_symlink "$host_bin_dir/$target_app" "$export_bin_dir"
+			if [ -f "$export_bin_dir/$target_app" ]; then
+				rm -f "$export_bin_dir/$target_app"
+			fi
+		fi
+
+		if [ -d "$host_apps_dir" ]; then
+			for desktop_link in "$host_apps_dir"/towel-*.desktop; do
+				[ -L "$desktop_link" ] || continue
+				local target_path
+				target_path=$(readlink "$desktop_link" 2>/dev/null) || true
+				case "$target_path" in
+				"${export_apps_dir}"/*)
+					if grep -q "^Exec=.*$target_app" "$target_path" 2>/dev/null; then
+						rm -f "$desktop_link"
+						rm -f "$target_path"
+					fi
+					;;
+				esac
+			done
+			update-desktop-database "$host_apps_dir" >/dev/null 2>&1 || true
+		fi
+
+		if [ -d "$export_apps_dir" ]; then
+			for desktop_file in "$export_apps_dir"/towel-*.desktop; do
+				[ -f "$desktop_file" ] || continue
+				if grep -q "^Exec=.*$target_app" "$desktop_file" 2>/dev/null; then
+					rm -f "$desktop_file"
+				fi
+			done
+		fi
+		return
+	fi
+
+	if [ -d "$host_bin_dir" ]; then
+		for bin_link in "$host_bin_dir"/*; do
+			[ -L "$bin_link" ] || continue
+			towel_remove_managed_symlink "$bin_link" "$export_bin_dir"
+		done
+	fi
+
+	if [ -d "$host_apps_dir" ]; then
+		for desktop_link in "$host_apps_dir"/towel-*.desktop; do
+			[ -L "$desktop_link" ] || continue
+			towel_remove_managed_symlink "$desktop_link" "$export_apps_dir"
+		done
+		update-desktop-database "$host_apps_dir" >/dev/null 2>&1 || true
+	fi
+
+	[ -d "$export_bin_dir" ] && rm -rf "$export_bin_dir"
+	[ -d "$export_apps_dir" ] && rm -rf "$export_apps_dir"
+}
+
+_towel_set_opts
