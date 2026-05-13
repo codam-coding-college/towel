@@ -2,6 +2,16 @@
 
 ### Features
 
+* add towel update --check / --apply subcommand ([17dfe98](https://github.com/codam-coding-college/towel/commit/17dfe98f70ef8df60047cb6e9c725b88c95d4093))
+
+### Reverts
+
+* DONT trust PATH inside towel ([d080e20](https://github.com/codam-coding-college/towel/commit/d080e202cd57e9dcfd8f2439253626e9b2e16621))
+
+## [0.1.0](https://github.com/codam-coding-college/towel/compare/v0.0.0...v0.1.0) (2026-05-13)
+
+### Features
+
 * add towel update --check / --apply subcommand ([10997de](https://github.com/codam-coding-college/towel/commit/10997de39f5e1db8e0c9d06fcc538d67f1c53b3b))
 
 ### Reverts
