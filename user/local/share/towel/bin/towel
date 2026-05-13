@@ -18,6 +18,15 @@ function print_help() {
 	"$TOWEL_BIN_DIR/towel-help"
 }
 
+function print_version() {
+	local version_file="$TOWEL_DATA/VERSION"
+	if [ -f "$version_file" ]; then
+		printf 'towel %s\n' "$(cat "$version_file")"
+	else
+		echo "towel (unknown version)" 1>&2
+	fi
+}
+
 function unknown_command() {
 	echo 1>&2 "Unknown command \`towel $1'"
 	echo 1>&2 "Try \`towel -h'"
@@ -39,6 +48,9 @@ shift
 case "$cmd" in
 -h | --help)
 	print_help
+	;;
+-v | --version)
+	print_version
 	;;
 create | exec | enter | export | install | remove)
 	"$TOWEL_BIN_DIR/towel-$cmd" "$@"

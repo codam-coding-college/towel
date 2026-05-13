@@ -4,6 +4,8 @@ TOWEL_INI="$HOME/.config/distrobox/towel.ini"
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
 TOWEL_BIN_DIR="${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}"
 TOWEL_EXPORTS="${TOWEL_DATA:-${HOME}/.local/share/towel}/exports"
+# shellcheck disable=SC2034 # Justification: consumed by subcommands that source this file.
+TOWEL_VERSION="$(cat "$TOWEL_DATA/VERSION" 2>/dev/null || echo unknown)"
 
 function inside_towel() {
 	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] >/dev/null 2>&1

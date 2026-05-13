@@ -127,6 +127,7 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	fi
 	/usr/bin/mkdir -p "$TOWEL_DATA"
 	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
+	/usr/bin/mkdir -p "$USER_CONFIG"
 
 	/usr/bin/cp -rft "$TOWEL_DATA/.." user/local/share/towel
 
@@ -153,6 +154,7 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 		created_towel_bin="true"
 	fi
 	/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
+	/usr/bin/cp -f VERSION "$TOWEL_DATA/VERSION"
 
 	echo -e "${color[green]}Files copied successfully.${color[reset]}"
 	echo -e "${color[cyan]}Ensuring $HOME/.local/bin is in PATH...${color[reset]}"
