@@ -4,9 +4,22 @@
 TOWEL_INI="$HOME/.config/distrobox/towel.ini"
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
 TOWEL_BIN_DIR="${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}"
+# shellcheck disable=SC2034 # Justification: consumed by subcommands that source this file.
+TOWEL_BIN="${TOWEL_BIN:-"$HOME/.local/bin/towel"}"
 TOWEL_EXPORTS="${TOWEL_DATA:-${HOME}/.local/share/towel}/exports"
 # shellcheck disable=SC2034 # Justification: consumed by subcommands that source this file.
 TOWEL_VERSION="$(cat "$TOWEL_DATA/VERSION" 2>/dev/null || echo unknown)"
+
+function towel_install_from_dir() {
+	local src_dir="$1"
+	[ -n "$src_dir" ] || return 64
+	[ -d "$src_dir/user/local/share/towel" ] || return 65
+	/usr/bin/mkdir -p "$TOWEL_DATA"
+	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
+	/usr/bin/cp -rft "$TOWEL_DATA/.." "$src_dir/user/local/share/towel"
+	/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
+	[ -f "$src_dir/VERSION" ] && /usr/bin/cp -f "$src_dir/VERSION" "$TOWEL_DATA/VERSION"
+}
 
 function inside_towel() {
 	[ -n "$CONTAINER_ID" ] && [ "$CONTAINER_ID" = "towel" ] >/dev/null 2>&1

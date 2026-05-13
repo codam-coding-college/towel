@@ -63,6 +63,8 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	trap cleanup EXIT
 
 	SCRIPT_DIR="$(/usr/bin/dirname "$(/usr/bin/readlink -f "$0")")"
+	# shellcheck source=user/local/share/towel/bin/towel-common
+	source "$SCRIPT_DIR/user/local/share/towel/bin/towel-common"
 	pin_file="$SCRIPT_DIR/.distrobox-pin"
 	test -f "$pin_file" || fatal "Pin file not found: $pin_file"
 	# shellcheck source=.distrobox-pin
@@ -126,11 +128,11 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	if [ ! -d "$TOWEL_DATA" ]; then
 		created_towel_data="true"
 	fi
-	/usr/bin/mkdir -p "$TOWEL_DATA"
-	/usr/bin/mkdir -p "$(/bin/dirname "$TOWEL_BIN")"
+	if [ ! -e "$TOWEL_BIN" ] && [ ! -L "$TOWEL_BIN" ]; then
+		created_towel_bin="true"
+	fi
 	/usr/bin/mkdir -p "$USER_CONFIG"
-
-	/usr/bin/cp -rft "$TOWEL_DATA/.." user/local/share/towel
+	towel_install_from_dir "$SCRIPT_DIR"
 
 	backup_suffix=".bak.$(/usr/bin/date +%Y%m%d%H%M%S)"
 	backed_up=()
@@ -151,11 +153,6 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	fi
 
 	/usr/bin/cp -rft "$USER_CONFIG" user/config/containers user/config/distrobox
-	if [ ! -e "$TOWEL_BIN" ] && [ ! -L "$TOWEL_BIN" ]; then
-		created_towel_bin="true"
-	fi
-	/usr/bin/ln -sf "$TOWEL_DATA/bin/towel" "$TOWEL_BIN"
-	/usr/bin/cp -f VERSION "$TOWEL_DATA/VERSION"
 
 	echo -e "${color[green]}Files copied successfully.${color[reset]}"
 	echo -e "${color[cyan]}Ensuring $HOME/.local/bin is in PATH...${color[reset]}"
