@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+
+declare -ra bltins=(builtin cd continue declare echo exit getopts read return set shift source test trap unalias unset)
+enable >/dev/null 2>&1 "${bltins[@]}"
+unalias >/dev/null 2>&1 "${bltins[@]}"
+
+TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
+TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
+
+# shellcheck source=user/local/share/towel/bin/towel-common
+source "$TOWEL_BIN_DIR/towel-common"
+
+TOWEL_GITHUB_REPO="${TOWEL_GITHUB_REPO:-codam-coding-college/towel}"
+
+function print_usage() {
+	echo 1>&2 "Usage:
+  towel update --check  [--quiet]
+  towel update --apply  [-y|--yes]
+  towel update [-h|--help]
+
+Flags:
+  --check        Query GitHub for the latest release and compare to the installed version.
+                 Exits 0 if up to date, 10 if an update is available, 1 on error.
+  --apply        Download, verify, and install the latest release.
+  -y, --yes      Skip the confirmation prompt (--apply only).
+  --quiet        Suppress stdout output (--check only; stderr and exit code preserved).
+  -h, --help     Print this help text.
+
+Environment:
+  TOWEL_GITHUB_REPO  Override the GitHub owner/repo (default: codam-coding-college/towel)."
+}
+
+function _towel_update_compare() {
+	local IFS=.
+	# shellcheck disable=SC2206 # Justification: intentional word-split on IFS='.' to parse semver fields.
+	local -a a=($1) b=($2)
+	local i
+	for i in 0 1 2; do
+		if ((${a[i]:-0} < ${b[i]:-0})); then
+			echo lt
+			return
+		fi
+		if ((${a[i]:-0} > ${b[i]:-0})); then
+			echo gt
+			return
+		fi
+	done
+	echo eq
+}
+
+function _towel_fetch_latest_version() {
+	local raw
+	raw="$(
+		/usr/bin/curl -fsSL "https://api.github.com/repos/${TOWEL_GITHUB_REPO}/releases/latest" 2>/dev/null
+	)" || return 1
+	printf '%s' "$raw" |
+		grep -oE '"tag_name":[[:space:]]*"v?[^"]+"' |
+		head -1 |
+		sed -E 's/.*"v?([^"]+)"/\1/'
+}
+
+mode=""
+assume_yes="false"
+quiet="false"
+
+for arg in "$@"; do
+	case "$arg" in
+	--check) mode="check" ;;
+	--apply) mode="apply" ;;
+	-y | --yes) assume_yes="true" ;;
+	--quiet) quiet="true" ;;
+	-h | --help)
+		print_usage
+		exit 0
+		;;
+	*)
+		echo 1>&2 "Unknown argument: $arg"
+		print_usage
+		exit 64
+		;;
+	esac
+done
+
+if [ -z "$mode" ]; then
+	echo 1>&2 "towel update: a mode flag is required (--check or --apply)"
+	print_usage
+	exit 64
+fi
+
+latest_version="$(_towel_fetch_latest_version)" || {
+	echo 1>&2 "towel update --${mode} failed: could not reach GitHub API (check network connectivity)"
+	exit 1
+}
+
+if [ -z "$latest_version" ]; then
+	echo 1>&2 "towel update --${mode} failed: could not parse latest release version from GitHub API"
+	exit 1
+fi
+
+local_version="$TOWEL_VERSION"
+cmp_result="$(_towel_update_compare "$local_version" "$latest_version")"
+
+if [ "$mode" = "check" ]; then
+	case "$cmp_result" in
+	eq)
+		[ "$quiet" = "false" ] && echo "towel is up to date ($local_version)"
+		exit 0
+		;;
+	lt)
+		[ "$quiet" = "false" ] && echo "towel update available: $local_version -> $latest_version"
+		exit 10
+		;;
+	gt)
+		[ "$quiet" = "false" ] && echo "towel is ahead of latest release ($local_version > $latest_version)"
+		exit 0
+		;;
+	esac
+fi
+
+# --apply path
+if [ "$cmp_result" = "eq" ] && [ "$assume_yes" != "true" ]; then
+	echo "towel is already at $local_version."
+	exit 0
+fi
+
+if [ "$cmp_result" = "eq" ] && [ "$assume_yes" = "true" ]; then
+	echo "Reinstalling towel $local_version..."
+elif [ "$cmp_result" = "lt" ]; then
+	echo "Updating towel from $local_version to $latest_version."
+else
+	echo "Downgrading towel from $local_version to $latest_version."
+fi
+
+if [ "$assume_yes" != "true" ]; then
+	if [ -t 0 ]; then
+		builtin read -rp "Proceed? [y/N] " reply
+		case "$reply" in
+		y | Y | yes | Yes | YES) ;;
+		*)
+			echo "Aborted."
+			exit 0
+			;;
+		esac
+	else
+		echo 1>&2 "Non-interactive shell: re-run with --yes to confirm."
+		exit 1
+	fi
+fi
+
+tmpdir="$(/usr/bin/mktemp -d)"
+trap '/usr/bin/rm -rf "$tmpdir"' EXIT
+
+base_url="https://github.com/${TOWEL_GITHUB_REPO}/releases/download/v${latest_version}"
+tarball="towel-${latest_version}.tar.gz"
+checksum="${tarball}.sha256"
+
+echo "Downloading $tarball..."
+/usr/bin/curl -fsSL -o "$tmpdir/$tarball" "$base_url/$tarball" || {
+	echo 1>&2 "towel update --apply failed: download failed ($base_url/$tarball)"
+	exit 1
+}
+/usr/bin/curl -fsSL -o "$tmpdir/$checksum" "$base_url/$checksum" || {
+	echo 1>&2 "towel update --apply failed: download failed ($base_url/$checksum)"
+	exit 1
+}
+
+echo "Verifying checksum..."
+(
+	cd "$tmpdir"
+	# sha256sum -c expects the filename column to match the local file; rewrite it.
+	sed "s/${tarball}$/${tarball}/" "$checksum" | /usr/bin/sha256sum -c - >/dev/null 2>&1
+) || {
+	echo 1>&2 "towel update --apply failed: sha256 checksum mismatch — download may be corrupt"
+	exit 1
+}
+
+echo "Extracting..."
+/usr/bin/tar -xzf "$tmpdir/$tarball" -C "$tmpdir" || {
+	echo 1>&2 "towel update --apply failed: tar extraction error"
+	exit 1
+}
+
+src="$tmpdir/towel-${latest_version}"
+if [ ! -d "$src/user/local/share/towel" ]; then
+	echo 1>&2 "towel update --apply failed: unexpected tarball layout (missing user/local/share/towel)"
+	exit 1
+fi
+
+# Source towel-common from the new tarball so towel_install_from_dir reflects
+# any changes in the release being installed.
+# shellcheck source=/dev/null
+source "$src/user/local/share/towel/bin/towel-common"
+
+towel_install_from_dir "$src"
+
+echo "towel updated to $latest_version."
+echo "Note: distrobox/containers configs were not refreshed."
+echo "      Re-run ./install from the tarball to update those."

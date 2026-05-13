@@ -13,6 +13,7 @@ Available Commands:
   export   Export installed package apps/binaries to host-managed wrappers
   install  Install package inside the towel container (prompts for host export)
   remove   Remove towel container, cannot be undone
+  update   Check for or apply a new towel release (--check / --apply)
 
 Install Options:
   -y, --yes  Assume yes to export prompt during install

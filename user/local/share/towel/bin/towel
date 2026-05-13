@@ -52,7 +52,7 @@ case "$cmd" in
 -v | --version)
 	print_version
 	;;
-create | exec | enter | export | install | remove)
+create | exec | enter | export | install | remove | update)
 	"$TOWEL_BIN_DIR/towel-$cmd" "$@"
 	;;
 -*)

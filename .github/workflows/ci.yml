@@ -91,6 +91,8 @@ jobs:
             cmp -s "$HOME/.local/share/towel/VERSION" "'"$GITHUB_WORKSPACE"'/VERSION"
             "$HOME/.local/bin/towel" --version | grep -E "^towel [0-9]+\.[0-9]+\.[0-9]+$"
             "$HOME/.local/bin/towel" -h >/dev/null 2>&1 || true
+            "$HOME/.local/bin/towel" update -h 2>&1 | grep -q "\-\-check"
+            "$HOME/.local/bin/towel" update && true; test $? -eq 64
           '
 
   release:
