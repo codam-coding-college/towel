@@ -3,6 +3,7 @@
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
 TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 
+# shellcheck source=user/local/share/towel/bin/towel-common
 source "$TOWEL_BIN_DIR/towel-common"
 
 assume_yes=false
@@ -41,6 +42,7 @@ if ! $assume_yes; then
 	esac
 fi
 
+# shellcheck disable=SC2119 # Justification: function uses "${1:-}" so a no-arg call is intentional.
 towel_remove_exported_apps
 
 distrobox assemble rm --file "$TOWEL_INI"

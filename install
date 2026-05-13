@@ -67,8 +67,9 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	test -f "$pin_file" || fatal "Pin file not found: $pin_file"
 	# shellcheck source=.distrobox-pin
 	source "$pin_file"
-	test -n "$DISTROBOX_VERSION" && test -n "$DISTROBOX_URL" && test -n "$DISTROBOX_SHA256" \
-		|| fatal "Pin file is missing one of DISTROBOX_VERSION/URL/SHA256: $pin_file"
+	if [ -z "$DISTROBOX_VERSION" ] || [ -z "$DISTROBOX_URL" ] || [ -z "$DISTROBOX_SHA256" ]; then
+		fatal "Pin file is missing one of DISTROBOX_VERSION/URL/SHA256: $pin_file"
+	fi
 
 	echo -e "${color[cyan]}Towel installer${color[reset]}"
 	echo "  - copy towel files to $TOWEL_DATA"
@@ -104,13 +105,13 @@ unalias "${bltins[@]}" >/dev/null 2>&1
 	if ! command -v distrobox >/dev/null 2>&1; then
 		echo -e "${color[yellow]}distrobox is not installed. Installing distrobox ${DISTROBOX_VERSION}...${color[reset]}"
 		distrobox_tmp_dir="$(/usr/bin/mktemp -d)"
-		/usr/bin/curl -sSf "$DISTROBOX_URL" -o "$distrobox_tmp_dir/install" \
-			|| fatal "Failed to download distrobox installer from $DISTROBOX_URL. Please install it manually and re-run this installer."
+		/usr/bin/curl -sSf "$DISTROBOX_URL" -o "$distrobox_tmp_dir/install" ||
+			fatal "Failed to download distrobox installer from $DISTROBOX_URL. Please install it manually and re-run this installer."
 		actual_sha="$(/usr/bin/sha256sum "$distrobox_tmp_dir/install" | /usr/bin/awk '{print $1}')"
-		[ "$actual_sha" = "$DISTROBOX_SHA256" ] \
-			|| fatal "distrobox installer checksum mismatch: expected $DISTROBOX_SHA256, got $actual_sha. Please install distrobox manually and re-run this installer."
-		sh "$distrobox_tmp_dir/install" --prefix="$HOME/.local" \
-			|| fatal "Failed to install distrobox. Please install it manually and re-run this installer."
+		[ "$actual_sha" = "$DISTROBOX_SHA256" ] ||
+			fatal "distrobox installer checksum mismatch: expected $DISTROBOX_SHA256, got $actual_sha. Please install distrobox manually and re-run this installer."
+		sh "$distrobox_tmp_dir/install" --prefix="$HOME/.local" ||
+			fatal "Failed to install distrobox. Please install it manually and re-run this installer."
 		/usr/bin/rm -rf "$distrobox_tmp_dir"
 		distrobox_tmp_dir=""
 	else

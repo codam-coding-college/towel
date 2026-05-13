@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2034 # Justification: consumed by subcommands that source this file.
 TOWEL_INI="$HOME/.config/distrobox/towel.ini"
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
 TOWEL_BIN_DIR="${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}"

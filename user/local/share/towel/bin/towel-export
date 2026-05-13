@@ -3,6 +3,7 @@
 TOWEL_DATA=${TOWEL_DATA:-"$HOME/.local/share/towel"}
 TOWEL_BIN_DIR=${TOWEL_BIN_DIR:-"$TOWEL_DATA/bin"}
 
+# shellcheck source=user/local/share/towel/bin/towel-common
 source "$TOWEL_BIN_DIR/towel-common"
 
 if [ $# -eq 0 ]; then
