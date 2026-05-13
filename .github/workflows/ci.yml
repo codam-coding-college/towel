@@ -112,3 +112,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+      - name: Verify release assets
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="$(git describe --tags --abbrev=0)"
+          gh release view "$tag" --json assets --jq '.assets[].name' \
+            | grep -E "^towel-.+\.tar\.gz(\.sha256)?$"
+          n="$(gh release view "$tag" --json assets --jq '.assets | length')"
+          test "$n" -eq 2
