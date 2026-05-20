@@ -206,13 +206,23 @@ if [ ! -d "$src/user/local/share/towel" ]; then
 	exit 1
 fi
 
+set -e
 # Source towel-common from the new tarball so towel_install_from_dir reflects
 # any changes in the release being installed.
 # shellcheck source=/dev/null
 source "$src/user/local/share/towel/bin/towel-common"
 
-towel_install_from_dir "$src"
+backup_current="${TOWEL_DATA}.backup.$(date +%s)"
+mv "$TOWEL_DATA" "$backup_current" 2>/dev/null || true
+trap 'rm -rf "$TOWEL_DATA"; mv "$backup_current" "$TOWEL_DATA" 2>/dev/null' EXIT
 
+towel_install_from_dir "$src" || {
+	echo 1>&2 "towel update --apply failed: installation error"
+	exit 1
+}
+
+rm -rf "$backup_current"
+trap - EXIT
 echo "towel updated to $latest_version."
 echo "Note: distrobox/containers configs were not refreshed."
 echo "      Re-run ./install from the tarball to update those."
