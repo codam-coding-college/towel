@@ -1,3 +1,9 @@
+## [0.2.1](https://github.com/codam-coding-college/towel/compare/v0.2.0...v0.2.1) (2026-05-20)
+
+### Bug Fixes
+
+* Towel scripts got reloaded when update changes them. ([#10](https://github.com/codam-coding-college/towel/issues/10)) ([8fa5414](https://github.com/codam-coding-college/towel/commit/8fa5414e148e9cb14135789dae9728cca1621b0a))
+
 ## [0.2.0](https://github.com/codam-coding-college/towel/compare/v0.1.0...v0.2.0) (2026-05-20)
 
 ### Features
