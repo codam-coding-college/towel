@@ -285,4 +285,52 @@ function towel_remove_exported_apps() {
 	[ -d "$export_apps_dir" ] && rm -rf "$export_apps_dir"
 }
 
+function towel_auto_update_check() {
+	[ -n "${CONTAINER_ID:-}" ] && return
+	[ "${TOWEL_NO_UPDATE_CHECK:-}" = "1" ] && return
+	[ -f "$TOWEL_DATA/no-update-check" ] && return
+
+	local today
+	today="$(date +%Y-%m-%d)"
+	local check_state="$TOWEL_DATA/update_check"
+	local notified_file="$TOWEL_DATA/update_notified"
+	local stored_date="" stored_status="" stored_latest=""
+
+	local stored_line
+	if stored_line="$(cat "$check_state" 2>/dev/null)"; then
+		read -r stored_date stored_status stored_latest <<<"$stored_line"
+	fi
+
+	if [ "$stored_date" = "$today" ] && [ "$stored_status" = "lt" ] && [ -n "$stored_latest" ]; then
+		local notified_date
+		notified_date="$(cat "$notified_file" 2>/dev/null || true)"
+		if [ "$notified_date" != "$today" ]; then
+			echo 1>&2 "towel update available: $TOWEL_VERSION -> $stored_latest"
+			echo 1>&2 "  Run 'towel update --apply' to update, or 'towel update --no-auto-check' to disable these notifications."
+			printf '%s\n' "$today" >"$notified_file"
+		fi
+	fi
+
+	if [ "${stored_date:-}" != "$today" ]; then
+		(
+			out="$("$TOWEL_BIN_DIR/towel-update" --check 2>/dev/null)"
+			rc=$?
+			ts="$(date +%Y-%m-%d)"
+			case $rc in
+			0) printf '%s eq\n' "$ts" >"$check_state" ;;
+			10)
+				ver="$(printf '%s\n' "$out" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | tail -1)"
+				if [ -n "$ver" ]; then
+					printf '%s lt %s\n' "$ts" "$ver" >"$check_state"
+				else
+					printf '%s error\n' "$ts" >"$check_state"
+				fi
+				;;
+			*) printf '%s error\n' "$ts" >"$check_state" ;;
+			esac
+		) >/dev/null 2>&1 &
+		disown 2>/dev/null || true
+	fi
+}
+
 _towel_set_opts

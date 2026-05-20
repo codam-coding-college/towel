@@ -14,20 +14,25 @@ TOWEL_GITHUB_REPO="${TOWEL_GITHUB_REPO:-codam-coding-college/towel}"
 
 function print_usage() {
 	echo 1>&2 "Usage:
-  towel update --check  [--quiet]
-  towel update --apply  [-y|--yes]
+  towel update --check           [--quiet]
+  towel update --apply           [-y|--yes]
+  towel update --no-auto-check
+  towel update --auto-check
   towel update [-h|--help]
 
 Flags:
-  --check        Query GitHub for the latest release and compare to the installed version.
-                 Exits 0 if up to date, 10 if an update is available, 1 on error.
-  --apply        Download, verify, and install the latest release.
-  -y, --yes      Skip the confirmation prompt (--apply only).
-  --quiet        Suppress stdout output (--check only; stderr and exit code preserved).
-  -h, --help     Print this help text.
+  --check          Query GitHub for the latest release and compare to the installed version.
+                   Exits 0 if up to date, 10 if an update is available, 1 on error.
+  --apply          Download, verify, and install the latest release.
+  -y, --yes        Skip the confirmation prompt (--apply only).
+  --quiet          Suppress stdout output (--check only; stderr and exit code preserved).
+  --no-auto-check  Disable the automatic daily update check and notifications.
+  --auto-check     Re-enable the automatic daily update check.
+  -h, --help       Print this help text.
 
 Environment:
-  TOWEL_GITHUB_REPO  Override the GitHub owner/repo (default: codam-coding-college/towel)."
+  TOWEL_GITHUB_REPO       Override the GitHub owner/repo (default: codam-coding-college/towel)
+  TOWEL_NO_UPDATE_CHECK   Set to 1 to disable automatic update checks."
 }
 
 function _towel_update_compare() {
@@ -67,6 +72,8 @@ for arg in "$@"; do
 	case "$arg" in
 	--check) mode="check" ;;
 	--apply) mode="apply" ;;
+	--no-auto-check) mode="no-auto-check" ;;
+	--auto-check) mode="auto-check" ;;
 	-y | --yes) assume_yes="true" ;;
 	--quiet) quiet="true" ;;
 	-h | --help)
@@ -82,9 +89,22 @@ for arg in "$@"; do
 done
 
 if [ -z "$mode" ]; then
-	echo 1>&2 "towel update: a mode flag is required (--check or --apply)"
+	echo 1>&2 "towel update: a mode flag is required (--check, --apply, --no-auto-check, or --auto-check)"
 	print_usage
 	exit 64
+fi
+
+if [ "$mode" = "no-auto-check" ]; then
+	touch "$TOWEL_DATA/no-update-check"
+	echo "Automatic update checks disabled."
+	echo "  Re-enable with: towel update --auto-check"
+	exit 0
+fi
+
+if [ "$mode" = "auto-check" ]; then
+	rm -f "$TOWEL_DATA/no-update-check" "$TOWEL_DATA/update_check" "$TOWEL_DATA/update_notified"
+	echo "Automatic update checks enabled."
+	exit 0
 fi
 
 latest_version="$(_towel_fetch_latest_version)" || {
