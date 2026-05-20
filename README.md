@@ -6,7 +6,7 @@ A thin wrapper around **Distrobox** to keep your host clean while still running 
 
 ## What this project does
 
-Towel installs a `towel` command and a predefined Distrobox container (`towel`) based on Fedora toolbox. It adds a simple workflow for:
+Towel installs a `towel` command and a predefined Distrobox container config for `towel`, based on Fedora toolbox. It adds a simple workflow for:
 
 - creating/entering the container,
 - installing packages with `dnf` inside the container,
