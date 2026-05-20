@@ -14,6 +14,9 @@ if [ ! -d "$TOWEL_BIN_DIR" ]; then
 	exit 1
 fi
 
+# shellcheck source=user/local/share/towel/bin/towel-common
+source "$TOWEL_BIN_DIR/towel-common"
+
 function print_help() {
 	"$TOWEL_BIN_DIR/towel-help"
 }
@@ -38,6 +41,8 @@ function unknown_option() {
 	echo 1>&2 "Try \`towel -h'"
 	exit 1
 }
+
+towel_auto_update_check
 
 if [ $# -eq 0 ]; then
 	exec "$TOWEL_BIN_DIR/towel-enter"
