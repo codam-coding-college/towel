@@ -1,3 +1,9 @@
+## [0.2.0](https://github.com/codam-coding-college/towel/compare/v0.1.0...v0.2.0) (2026-05-20)
+
+### Features
+
+* Automatic update check with opt out ([#9](https://github.com/codam-coding-college/towel/issues/9)) ([fb62d37](https://github.com/codam-coding-college/towel/commit/fb62d37cd25bf3af65d98d48f1f997db4982a27d))
+
 ## [0.1.0](https://github.com/codam-coding-college/towel/compare/v0.0.0...v0.1.0) (2026-05-13)
 
 ### Features
